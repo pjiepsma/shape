@@ -1,0 +1,33 @@
+{
+  "draftRect": {
+    "minX": 0,
+    "maxX": 19,
+    "minY": 0,
+    "maxY": 5
+  },
+  "guideLineCellCount": 18,
+  "score": 0.20104483491020542,
+  "passed": false,
+  "nullPercentileScore": 0,
+  "debug": {
+    "templatePointCount": 385,
+    "rawHits": 71,
+    "rawHitRate": 0.18441558441558442,
+    "runMax": 32,
+    "longRunCount": 2,
+    "scoredHits": 71,
+    "shiftX": 0,
+    "shiftY": 8,
+    "minPassScore": 0.55,
+    "minCoherentRun": 12,
+    "imageWidth": 192,
+    "imageHeight": 256,
+    "viewWindow": {
+      "x": 0,
+      "y": 0,
+      "size": 1
+    },
+    "diagnosis": "large_claim_sparse_hits"
+  },
+  "nextFix": "claim_or_overlay_mismatch"
+}

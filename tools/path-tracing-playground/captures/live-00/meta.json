@@ -1,0 +1,39 @@
+{
+  "score": 0,
+  "viewSize": {
+    "width": 411.4285583496094,
+    "height": 669.1428833007812
+  },
+  "viewWindow": {
+    "x": 0,
+    "y": 0,
+    "size": 1
+  },
+  "debug": {
+    "templatePointCount": 385,
+    "rawHits": 0,
+    "rawHitRate": 0,
+    "runMax": 0,
+    "longRunCount": 0,
+    "scoredHits": 0,
+    "shiftX": 0,
+    "shiftY": 0,
+    "minPassScore": 0.55,
+    "minCoherentRun": 12,
+    "imageWidth": 192,
+    "imageHeight": 256,
+    "viewWindow": {
+      "x": 0,
+      "y": 0,
+      "size": 1
+    },
+    "diagnosis": "large_claim_sparse_hits"
+  },
+  "diagnosis": "large_claim_sparse_hits",
+  "draftRect": {
+    "minX": 0,
+    "maxX": 19,
+    "minY": 0,
+    "maxY": 5
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "draftRect": {
+    "minX": 5,
+    "maxX": 15,
+    "minY": 7,
+    "maxY": 19
+  },
+  "viewWindow": {
+    "x": 0.17000000000000004,
+    "y": 0.29000000000000004,
+    "size": 0.71
+  },
+  "score": 0,
+  "debug": {
+    "templatePointCount": 955,
+    "rawHits": 0,
+    "rawHitRate": 0,
+    "runMax": 0,
+    "longRunCount": 0,
+    "scoredHits": 0,
+    "shiftX": 0,
+    "shiftY": 0,
+    "minPassScore": 0.55,
+    "minCoherentRun": 12,
+    "imageWidth": 192,
+    "imageHeight": 144,
+    "viewWindow": {
+      "x": 0.17000000000000004,
+      "y": 0.29000000000000004,
+      "size": 0.71
+    },
+    "diagnosis": "large_claim_sparse_hits"
+  },
+  "diagnosis": "large_claim_sparse_hits",
+  "imageSize": {
+    "w": 192,
+    "h": 144
+  },
+  "templatePointCount": 955,
+  "photoUri": "file:///data/user/0/host.exp.exponent/cache/ExperienceData/%2540piepsma%252Fshape/Camera/abd27231-6fb1-43d7-8b9b-71dc4613ac66.jpg"
+}

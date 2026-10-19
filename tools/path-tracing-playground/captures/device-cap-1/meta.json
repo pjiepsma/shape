@@ -1,0 +1,38 @@
+{
+  "score": 0.20104483491020542,
+  "draftRect": {
+    "minX": 0,
+    "maxX": 19,
+    "minY": 0,
+    "maxY": 5
+  },
+  "viewWindow": {
+    "x": 0,
+    "y": 0,
+    "size": 1
+  },
+  "debug": {
+    "templatePointCount": 385,
+    "rawHits": 71,
+    "rawHitRate": 0.18441558441558442,
+    "runMax": 32,
+    "longRunCount": 2,
+    "scoredHits": 71,
+    "shiftX": 0,
+    "shiftY": 8,
+    "minPassScore": 0.55,
+    "minCoherentRun": 12,
+    "imageWidth": 192,
+    "imageHeight": 256,
+    "viewWindow": {
+      "x": 0,
+      "y": 0,
+      "size": 1
+    },
+    "diagnosis": "large_claim_sparse_hits"
+  },
+  "diagnosis": "large_claim_sparse_hits",
+  "templatePointCount": 385,
+  "photoUri": "file:///data/user/0/com.shapehunt.app/cache/Camera/83f30949-13e7-486f-808c-c617f059220a.jpg",
+  "timestamp": 1792442977159
+}
