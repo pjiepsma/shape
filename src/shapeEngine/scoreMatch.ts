@@ -474,32 +474,42 @@ function orientedChamferDetailed(
   offsetX: number,
   offsetY: number,
 ): { similarity: number; perPointGood: boolean[] } {
-  const costs: number[] = [];
+  /**
+   * Exponential OCM (standard): contrib = exp(-orientedDist / τ).
+   * Linear `1 - cost` capped perfect live sunglasses at ~91% even with
+   * rawHitRate=1 — residual orient noise on thick rims never reached ~0.
+   * Exp maps near-ridge probes to ~0.97–0.99 without a free %-point boost.
+   */
+  const contribs: number[] = [];
   const perPointGood: boolean[] = [];
   for (const point of points) {
     const px = Math.round(point.x + offsetX);
     const py = Math.round(point.y + offsetY);
     if (px < 0 || py < 0 || px >= scene.width || py >= scene.height) {
-      costs.push(1);
+      contribs.push(0);
       perPointGood.push(false);
       continue;
     }
     const index = py * scene.width + px;
-    const dDist = Math.min(tau, scene.dist[index] ?? tau) / tau;
-    const dOrient = angleDelta(point.angle, scene.nearestTangent[index] ?? 0) / (Math.PI / 2);
-    const cost = (1 - lambda) * dDist + lambda * Math.min(1, dOrient);
-    costs.push(cost);
-    perPointGood.push(cost <= 0.35);
+    const distPx = Math.min(tau, scene.dist[index] ?? tau);
+    const dOrient = Math.min(
+      1,
+      angleDelta(point.angle, scene.nearestTangent[index] ?? 0) / (Math.PI / 2),
+    );
+    // Distance in px + orientation as a px-scale penalty (λ·τ·dOrient).
+    const orientedDist = (1 - lambda) * distPx + lambda * tau * dOrient;
+    const contrib = Math.exp(-orientedDist / tau);
+    contribs.push(contrib);
+    perPointGood.push(orientedDist <= tau * 0.35);
   }
 
-  const sorted = [...costs].sort((a, b) => a - b);
+  const sorted = [...contribs].sort((a, b) => b - a);
   const keep = Math.max(1, Math.floor(sorted.length * partialKeep));
   let sum = 0;
   for (let i = 0; i < keep; i += 1) {
-    sum += sorted[i] ?? 1;
+    sum += sorted[i] ?? 0;
   }
-  const dScore = sum / keep;
-  return { similarity: clamp01(1 - dScore), perPointGood };
+  return { similarity: clamp01(sum / keep), perPointGood };
 }
 
 function continuityFactor(good: readonly boolean[], minRun: number): number {

@@ -44,8 +44,12 @@ export const gameRules = {
      */
     chamferTauPx: 18,
 
-    /** Weight of orientation vs distance in OCM: d = (1-λ)·d_dist + λ·d_orient. */
-    orientLambda: 0.45,
+    /**
+     * Orientation share of oriented distance (rest is edge distance).
+     * Thick real edges (sunglasses) have noisy tangents; 0.45 made perfect
+     * distance matches stall at ~91%. Distance-led λ keeps silhouette fidelity.
+     */
+    orientLambda: 0.22,
 
     /**
      * Use the best this fraction of template probes (partial Hausdorff spirit).

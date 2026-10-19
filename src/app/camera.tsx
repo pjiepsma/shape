@@ -4,11 +4,11 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { alignCaptureToPreviewAspect } from '@/camera/alignCaptureToPreviewAspect';
 import { CameraFitOverlay } from '@/camera/CameraFitOverlay';
 import { postScoreDebugCapture } from '@/camera/debugCaptureLog';
 import { loadGrayImage } from '@/camera/loadGrayImage';
 import { computeFitOverlayLayout } from '@/camera/overlayLayout';
+import { readJpegExifOrientation } from '@/camera/readJpegExifOrientation';
 import { gameRules } from '@/config/gameRules';
 import {
   buildScoreMatchCaptureLog,
@@ -17,9 +17,45 @@ import {
   pawnShape,
   scoreMatch,
   templatePointsInRect,
+  type GrayImage,
 } from '@/shapeEngine';
 import { useHuntStore } from '@/store/huntStore';
 import { colors } from '@/theme/colors';
+
+type LifecycleEvent = {
+  t: number;
+  event: string;
+  mountId: number;
+};
+
+/** Proof-only ring buffer — do not use to change capture behavior. */
+const lifecycleLog: LifecycleEvent[] = [];
+let mountCounter = 0;
+
+function pushLifecycle(event: string, mountId: number) {
+  lifecycleLog.push({ t: Date.now(), event, mountId });
+  if (lifecycleLog.length > 40) {
+    lifecycleLog.shift();
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7482/ingest/607d09ba-1f8f-4fdb-91b5-28274c52e0a7', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '4b16c8',
+    },
+    body: JSON.stringify({
+      sessionId: '4b16c8',
+      runId: 'proof',
+      hypothesisId: 'PROOF-lifecycle',
+      location: 'camera.tsx:lifecycle',
+      message: event,
+      data: { mountId, recent: lifecycleLog.slice(-8) },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+}
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -27,15 +63,22 @@ export default function CameraScreen() {
   const [isFocused, setIsFocused] = useState(true);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+  const mountIdRef = useRef(0);
   const [viewSize, setViewSize] = useState<{ width: number; height: number } | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Baseline that previously reproduced flips: remount CameraView on blur.
+  // No pictureSize cap, no EXIF bake — proof run only.
   useFocusEffect(
     useCallback(() => {
       setIsFocused(true);
+      pushLifecycle('focus', mountIdRef.current);
       return () => {
         setIsFocused(false);
+        setCameraReady(false);
+        pushLifecycle('blur', mountIdRef.current);
       };
     }, []),
   );
@@ -75,6 +118,10 @@ export default function CameraScreen() {
     if (capturing || !draftRect) {
       return;
     }
+    if (!cameraReady) {
+      setErrorMessage('Camera not ready — wait a moment.');
+      return;
+    }
     if (guideLineCells.length === 0) {
       setErrorMessage('Outline missing from selection — go back and re-select the region.');
       throw new Error('Camera shutter blocked: guideLineCells empty with draftRect set');
@@ -98,8 +145,8 @@ export default function CameraScreen() {
         quality: gameRules.storage.jpegQuality,
         skipProcessing: false,
       });
-      const rawUri = photo?.uri;
-      if (!rawUri) {
+      const uri = photo?.uri;
+      if (!uri) {
         setErrorMessage('Could not capture photo');
         return;
       }
@@ -110,41 +157,80 @@ export default function CameraScreen() {
         throw new Error('Shutter blocked: viewSize missing for claim crop');
       }
 
-      // Sensor is landscape; preview is portrait. Expo sometimes forgets to bake
-      // the 90° — only then we rotate so the file matches the viewfinder.
-      const aligned = await alignCaptureToPreviewAspect({
-        uri: rawUri,
-        photoWidth: photo.width,
-        photoHeight: photo.height,
-        viewWidth: viewSize.width,
-        viewHeight: viewSize.height,
-      });
-      const uri = aligned.uri;
-
       const gray = await loadGrayImage(uri, gameRules.scoring.downscaleWidth);
-      const score = scoreMatch({
+      const scoreArgs = {
         image: gray,
         templatePoints,
         viewWindow,
         viewSize,
-      });
+      };
+      const score = scoreMatch(scoreArgs);
+
+      // Proof only — never rewrite the photo from this.
+      const scoreFlipX = scoreMatch({ ...scoreArgs, image: flipGrayX(gray) });
+      const scoreFlipY = scoreMatch({ ...scoreArgs, image: flipGrayY(gray) });
+      const scoreRot180 = scoreMatch({ ...scoreArgs, image: flipGrayY(flipGrayX(gray)) });
+      let exifOrientation: number | null = null;
+      try {
+        exifOrientation = await readJpegExifOrientation(uri);
+      } catch {
+        exifOrientation = null;
+      }
+
+      const probeWinner =
+        bestOf([
+          { id: 'normal', score: score.score, hits: score.debug.rawHits },
+          { id: 'flipX', score: scoreFlipX.score, hits: scoreFlipX.debug.rawHits },
+          { id: 'flipY', score: scoreFlipY.score, hits: scoreFlipY.debug.rawHits },
+          { id: 'rot180', score: scoreRot180.score, hits: scoreRot180.debug.rawHits },
+        ]) ?? 'normal';
 
       // #region agent log
-      const scoreProbe = {
-        score: score.score,
-        passed: score.passed,
-        rawSimilarity: score.debug.rawSimilarity,
-        accidentalSimilarity: score.debug.accidentalSimilarity,
-        surplus: score.debug.rawSimilarity - score.debug.accidentalSimilarity,
-        rawHits: score.debug.rawHits,
-        rawHitRate: score.debug.rawHitRate,
-        shiftX: score.debug.shiftX,
-        shiftY: score.debug.shiftY,
-        nullPercentileScore: score.nullPercentileScore,
-        diagnosis: score.debug.diagnosis,
+      const proof = {
+        mountId: mountIdRef.current,
+        cameraReady,
+        isFocused,
+        lifecycleRecent: lifecycleLog.slice(-12),
         photoNative: { w: photo.width, h: photo.height },
-        photoAligned: { w: gray.width, h: gray.height, rotatedDegrees: aligned.rotatedDegrees },
+        skiaSource: { w: gray.sourceWidth, h: gray.sourceHeight },
         gray: { w: gray.width, h: gray.height },
+        viewSize,
+        exifOrientation,
+        dimsAgree:
+          photo.width === gray.sourceWidth && photo.height === gray.sourceHeight,
+        aspectClass: {
+          photoPortrait: photo.height >= photo.width,
+          skiaPortrait: gray.sourceHeight >= gray.sourceWidth,
+          viewPortrait: viewSize.height >= viewSize.width,
+        },
+        scoreNormal: {
+          score: score.score,
+          rawHits: score.debug.rawHits,
+          rawHitRate: score.debug.rawHitRate,
+          shiftX: score.debug.shiftX,
+          shiftY: score.debug.shiftY,
+        },
+        scoreFlipX: {
+          score: scoreFlipX.score,
+          rawHits: scoreFlipX.debug.rawHits,
+        },
+        scoreFlipY: {
+          score: scoreFlipY.score,
+          rawHits: scoreFlipY.debug.rawHits,
+        },
+        scoreRot180: {
+          score: scoreRot180.score,
+          rawHits: scoreRot180.debug.rawHits,
+        },
+        probeWinner,
+        // Clear signal: buffer orientation ≠ aimed silhouette
+        bufferMismatch:
+          probeWinner !== 'normal' &&
+          (probeWinner === 'flipY'
+            ? scoreFlipY.score > score.score + 0.15
+            : probeWinner === 'flipX'
+              ? scoreFlipX.score > score.score + 0.15
+              : scoreRot180.score > score.score + 0.15),
       };
       fetch('http://127.0.0.1:7482/ingest/607d09ba-1f8f-4fdb-91b5-28274c52e0a7', {
         method: 'POST',
@@ -154,15 +240,15 @@ export default function CameraScreen() {
         },
         body: JSON.stringify({
           sessionId: '4b16c8',
-          runId: 'post-fix',
-          hypothesisId: 'I-hires-ocm',
+          runId: 'proof',
+          hypothesisId: 'PROOF-shutter',
           location: 'camera.tsx:onShutter',
-          message: 'score with 256px edge map, no free %',
-          data: scoreProbe,
+          message: 'capture proof bundle (no rewrite)',
+          data: proof,
           timestamp: Date.now(),
         }),
       }).catch(() => {});
-      console.log(`SCORE_PROBE_JSON=${JSON.stringify(scoreProbe)}`);
+      console.log(`CAPTURE_PROOF_JSON=${JSON.stringify(proof)}`);
       // #endregion
 
       const captureLog = buildScoreMatchCaptureLog({
@@ -175,17 +261,15 @@ export default function CameraScreen() {
       router.push('/result');
       // #region agent log
       await postScoreDebugCapture({
-        runId: 'capture-hires',
-        hypothesisId: 'I-hires-ocm',
-        message: 'scoreMatch 256px edge map',
+        runId: 'proof-capture',
+        hypothesisId: 'PROOF-shutter',
+        message: 'proof capture with gray',
         gray,
         photoUri: uri,
         data: {
           ...captureLog,
-          ...scoreProbe,
+          ...proof,
           templatePointCount: templatePoints.length,
-          hypD_viewWindow: viewWindow,
-          hypD_viewSize: viewSize,
           nextFix: captureLog.nextFix,
         },
       });
@@ -247,6 +331,12 @@ export default function CameraScreen() {
             style={styles.camera}
             facing="back"
             mode="picture"
+            onCameraReady={() => {
+              mountCounter += 1;
+              mountIdRef.current = mountCounter;
+              setCameraReady(true);
+              pushLifecycle('cameraReady', mountIdRef.current);
+            }}
           />
         ) : null}
 
@@ -273,7 +363,9 @@ export default function CameraScreen() {
             <Text style={styles.chipText}>Back</Text>
           </Pressable>
           <Text style={styles.counter}>Align the outline, then shoot</Text>
-          <Text style={styles.counterMuted}>{guideLineCells.length} line cells in selection</Text>
+          <Text style={styles.counterMuted}>
+            {guideLineCells.length} line cells · proof logging on
+          </Text>
         </View>
 
         {errorMessage ? <Text style={styles.status}>{errorMessage}</Text> : null}
@@ -281,9 +373,9 @@ export default function CameraScreen() {
         <View style={styles.controls}>
           <View style={styles.spacer} />
           <Pressable
-            style={[styles.shutter, capturing && styles.shutterDisabled]}
+            style={[styles.shutter, (capturing || !cameraReady) && styles.shutterDisabled]}
             onPress={onShutter}
-            disabled={capturing}
+            disabled={capturing || !cameraReady}
           >
             <View style={styles.shutterInner} />
           </Pressable>
@@ -292,6 +384,46 @@ export default function CameraScreen() {
       </View>
     </View>
   );
+}
+
+function flipGrayX(image: GrayImage): GrayImage {
+  const pixels = new Uint8Array(image.pixels.length);
+  for (let y = 0; y < image.height; y += 1) {
+    const row = y * image.width;
+    for (let x = 0; x < image.width; x += 1) {
+      pixels[row + (image.width - 1 - x)] = image.pixels[row + x] ?? 0;
+    }
+  }
+  return { width: image.width, height: image.height, pixels };
+}
+
+function flipGrayY(image: GrayImage): GrayImage {
+  const pixels = new Uint8Array(image.pixels.length);
+  for (let y = 0; y < image.height; y += 1) {
+    const src = y * image.width;
+    const dst = (image.height - 1 - y) * image.width;
+    pixels.set(image.pixels.subarray(src, src + image.width), dst);
+  }
+  return { width: image.width, height: image.height, pixels };
+}
+
+function bestOf(
+  rows: { id: string; score: number; hits: number }[],
+): string | null {
+  let best = rows[0];
+  if (!best) {
+    return null;
+  }
+  for (const row of rows) {
+    if (row.score > best.score + 0.001) {
+      best = row;
+      continue;
+    }
+    if (Math.abs(row.score - best.score) <= 0.001 && row.hits > best.hits) {
+      best = row;
+    }
+  }
+  return best.id;
 }
 
 const styles = StyleSheet.create({

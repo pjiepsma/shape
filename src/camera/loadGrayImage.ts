@@ -2,10 +2,16 @@ import { AlphaType, ColorType, Skia } from '@shopify/react-native-skia';
 
 import type { GrayImage } from '@/shapeEngine';
 
+export type LoadedGrayImage = GrayImage & {
+  /** Encoded JPEG pixel size as Skia decoded it (EXIF not applied). */
+  sourceWidth: number;
+  sourceHeight: number;
+};
+
 /**
  * Decode a local photo URI, downscale to `targetWidth`, and return grayscale pixels.
  */
-export async function loadGrayImage(uri: string, targetWidth: number): Promise<GrayImage> {
+export async function loadGrayImage(uri: string, targetWidth: number): Promise<LoadedGrayImage> {
   const data = await Skia.Data.fromURI(uri);
   const image = Skia.Image.MakeImageFromEncoded(data);
   if (!image) {
@@ -52,5 +58,5 @@ export async function loadGrayImage(uri: string, targetWidth: number): Promise<G
     pixels[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
   }
 
-  return { width, height, pixels };
+  return { width, height, pixels, sourceWidth: srcW, sourceHeight: srcH };
 }
