@@ -1,7 +1,9 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { Button, Chip, Surface } from 'heroui-native';
+import { EmptyState } from 'heroui-native-pro/empty-state';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ShapeCameraOverlay } from '@/camera/ShapeCameraOverlay';
@@ -12,14 +14,10 @@ import {
 } from '@/camera/overlayLayout';
 import { gameRules } from '@/config/gameRules';
 import { buildShape, pawnShape, type LineCell } from '@/shapeEngine';
-import {
-  huntEndScore,
-  isHuntComplete,
-  useHuntStore,
-} from '@/store/huntStore';
-import { colors } from '@/theme/colors';
+import { huntEndScore, isHuntComplete, useHuntStore } from '@/store/huntStore';
 
 const NO_GUIDE_CELLS: LineCell[] = [];
+const FRAME_PAD = 16;
 
 export default function CompleteScreen() {
   const router = useRouter();
@@ -57,182 +55,140 @@ export default function CompleteScreen() {
 
   if (!complete || photos.length === 0) {
     return (
-      <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
-        <Text style={styles.eyebrow}>Hunt complete</Text>
-        <Text style={styles.empty}>No finished hunt to show.</Text>
-        <Pressable style={styles.primaryButton} onPress={() => router.replace('/')}>
-          <Text style={styles.primaryButtonText}>Home</Text>
-        </Pressable>
+      <View
+        className="flex-1 bg-background justify-center px-6"
+        style={{ paddingTop: insets.top }}
+      >
+        <EmptyState>
+          <EmptyState.Header>
+            <EmptyState.Title>Outsee</EmptyState.Title>
+            <EmptyState.Description>No finished hunt to show.</EmptyState.Description>
+          </EmptyState.Header>
+          <EmptyState.Content>
+            <Button onPress={() => router.replace('/')}>
+              <Button.Label>Home</Button.Label>
+            </Button>
+          </EmptyState.Content>
+        </EmptyState>
       </View>
     );
   }
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 16) }]}>
-      <Text style={styles.eyebrow}>Hunt complete</Text>
-      <Text style={styles.score}>{endScorePct}%</Text>
-      <Text style={styles.meta}>
-        Match quality · {photos.length} photo{photos.length === 1 ? '' : 's'} · {passedCount}{' '}
-        passed
-      </Text>
-
-      <View
-        style={styles.preview}
-        onLayout={(event) => {
-          const { width, height } = event.nativeEvent.layout;
-          if (width <= 0 || height <= 0) {
-            return;
-          }
-          setLayout((prev) =>
-            prev && prev.width === width && prev.height === height
-              ? prev
-              : computeOverlayLayout(width, height, gameRules.selectEdgeInsetPx),
-          );
-        }}
+    <View
+      className="flex-1 bg-background px-6 gap-3"
+      style={{
+        paddingTop: insets.top,
+        paddingBottom: Math.max(insets.bottom, FRAME_PAD),
+      }}
+    >
+      <Text className="text-muted font-medium text-base mt-3">Hunt complete</Text>
+      <Text
+        className="text-5xl text-accent leading-none"
+        style={{ fontFamily: 'Anton-Regular' }}
       >
-        {photoTiles.map(({ photo, frame }) =>
-          photo.uri ? (
-            <Image
-              key={photo.id}
-              source={{ uri: photo.uri }}
-              style={[
-                styles.photoTile,
-                {
+        {endScorePct}%
+      </Text>
+      <View className="flex-row flex-wrap gap-2">
+        <Chip size="sm" variant="secondary">
+          Match quality
+        </Chip>
+        <Chip size="sm" variant="secondary">
+          {photos.length} photo{photos.length === 1 ? '' : 's'}
+        </Chip>
+        <Chip size="sm" variant="soft" color="success">
+          {passedCount} passed
+        </Chip>
+      </View>
+
+      <Surface className="flex-1 overflow-hidden p-0 min-h-[220px]">
+        <View
+          className="flex-1"
+          onLayout={(event) => {
+            const { width, height } = event.nativeEvent.layout;
+            if (width <= 0 || height <= 0) {
+              return;
+            }
+            setLayout((prev) =>
+              prev && prev.width === width && prev.height === height
+                ? prev
+                : computeOverlayLayout(width, height, gameRules.selectEdgeInsetPx),
+            );
+          }}
+        >
+          {photoTiles.map(({ photo, frame }) =>
+            photo.uri ? (
+              <Image
+                key={photo.id}
+                source={{ uri: photo.uri }}
+                style={{
+                  position: 'absolute',
                   left: frame.x,
                   top: frame.y,
                   width: frame.width,
                   height: frame.height,
-                },
-              ]}
-              contentFit="fill"
-            />
-          ) : (
-            <View
-              key={photo.id}
-              style={[
-                styles.photoTile,
-                {
+                }}
+                contentFit="fill"
+              />
+            ) : (
+              <View
+                key={photo.id}
+                style={{
+                  position: 'absolute',
                   left: frame.x,
                   top: frame.y,
                   width: frame.width,
                   height: frame.height,
                   backgroundColor: photo.color,
-                },
-              ]}
-            />
-          ),
-        )}
+                }}
+              />
+            ),
+          )}
 
-        {layout ? (
-          <ShapeCameraOverlay
-            mode="project"
-            shape={shape}
-            layout={layout}
-            photos={photos}
-            draftRect={null}
-            guideLineCells={NO_GUIDE_CELLS}
-            showClaimFills={false}
-          />
-        ) : null}
-      </View>
+          {layout ? (
+            <ShapeCameraOverlay
+              mode="project"
+              shape={shape}
+              layout={layout}
+              photos={photos}
+              draftRect={null}
+              guideLineCells={NO_GUIDE_CELLS}
+              showClaimFills={false}
+            />
+          ) : null}
+        </View>
+      </Surface>
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.thumbs}
+        contentContainerStyle={{ flexDirection: 'row', gap: 10, paddingVertical: 4 }}
       >
         {photos.map((photo) => (
-          <View key={photo.id} style={styles.thumbWrap}>
+          <View key={photo.id} className="w-[72px] gap-1">
             {photo.uri ? (
-              <Image source={{ uri: photo.uri }} style={styles.thumb} contentFit="cover" />
+              <Image
+                source={{ uri: photo.uri }}
+                className="border-2 border-border"
+                style={{ width: 72, height: 72 }}
+                contentFit="cover"
+              />
             ) : (
-              <View style={[styles.thumb, { backgroundColor: photo.color }]} />
+              <View
+                className="w-[72px] h-[72px] border-2 border-border"
+                style={{ backgroundColor: photo.color }}
+              />
             )}
-            <Text style={styles.thumbScore}>{Math.round(photo.score * 100)}%</Text>
+            <Text className="text-muted font-medium text-xs text-center">
+              {Math.round(photo.score * 100)}%
+            </Text>
           </View>
         ))}
       </ScrollView>
 
-      <Pressable style={styles.primaryButton} onPress={onRestart}>
-        <Text style={styles.primaryButtonText}>Restart hunt</Text>
-      </Pressable>
+      <Button size="lg" className="w-full" onPress={onRestart}>
+        <Button.Label>Restart hunt</Button.Label>
+      </Button>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.background,
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  centered: {
-    justifyContent: 'center',
-  },
-  eyebrow: {
-    fontFamily: 'DMSans_500Medium',
-    color: colors.textMuted,
-    fontSize: 16,
-    marginTop: 12,
-  },
-  score: {
-    fontFamily: 'DMSans_700Bold',
-    color: colors.accent,
-    fontSize: 48,
-  },
-  meta: {
-    fontFamily: 'DMSans_400Regular',
-    color: colors.text,
-    fontSize: 15,
-  },
-  empty: {
-    fontFamily: 'DMSans_400Regular',
-    color: colors.textMuted,
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  preview: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: colors.card,
-    minHeight: 220,
-  },
-  photoTile: {
-    position: 'absolute',
-  },
-  thumbs: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingVertical: 4,
-  },
-  thumbWrap: {
-    width: 72,
-    gap: 4,
-  },
-  thumb: {
-    width: 72,
-    height: 72,
-    borderRadius: 10,
-    backgroundColor: colors.card,
-  },
-  thumbScore: {
-    fontFamily: 'DMSans_500Medium',
-    color: colors.textMuted,
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  primaryButton: {
-    minHeight: 48,
-    borderRadius: 12,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    fontFamily: 'DMSans_700Bold',
-    color: colors.background,
-    fontSize: 16,
-  },
-});

@@ -1,5 +1,5 @@
 /**
- * Single tuning file for Shape Hunt game rules and scoring knobs.
+ * Single tuning file for Outsee game rules and scoring knobs.
  * Claim percentages are relative to the project grid (gridSize²).
  * Scoring: Oriented Chamfer Matching + accidentalness (NOCD-lite).
  */

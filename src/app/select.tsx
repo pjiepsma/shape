@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
+import { Button, Surface } from 'heroui-native';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -15,9 +16,9 @@ import {
   isHuntComplete,
   useHuntStore,
 } from '@/store/huntStore';
-import { colors } from '@/theme/colors';
 
 const NO_GUIDE_CELLS: LineCell[] = [];
+const FRAME_PAD = 16;
 
 export default function SelectScreen() {
   const router = useRouter();
@@ -115,14 +116,22 @@ export default function SelectScreen() {
 
   if (huntComplete) {
     return (
-      <View style={[styles.root, styles.completeRoot, { paddingTop: insets.top }]}>
-        <Text style={styles.title}>Nothing left to claim</Text>
-        <Text style={styles.hint}>
+      <View
+        className="flex-1 bg-background justify-center px-6 gap-4"
+        style={{ paddingTop: insets.top }}
+      >
+        <Text
+          className="text-3xl text-foreground leading-none"
+          style={{ fontFamily: 'Anton-Regular' }}
+        >
+          Nothing left to claim
+        </Text>
+        <Text className="text-muted text-base">
           The project grid is full — today’s outline is complete ({photos.length} photo
           {photos.length === 1 ? '' : 's'}).
         </Text>
-        <Pressable
-          style={styles.continueButton}
+        <Button
+          size="lg"
           onPress={() => {
             if (router.canDismiss()) {
               router.dismissTo('/complete');
@@ -131,159 +140,85 @@ export default function SelectScreen() {
             }
           }}
         >
-          <Text style={styles.continueText}>View results</Text>
-        </Pressable>
+          <Button.Label>View results</Button.Label>
+        </Button>
       </View>
     );
   }
 
   return (
-    <View style={styles.root}>
+    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
       <View
-        style={styles.stage}
-        onLayout={(event) => {
-          const { width, height } = event.nativeEvent.layout;
-          setLayout(computeOverlayLayout(width, height, gameRules.selectEdgeInsetPx));
+        className="flex-1"
+        style={{
+          paddingTop: FRAME_PAD,
+          paddingLeft: FRAME_PAD,
+          paddingRight: FRAME_PAD,
+          paddingBottom: FRAME_PAD,
         }}
       >
-        {layout ? (
-          <GestureDetector gesture={pan}>
-            <View style={StyleSheet.absoluteFill}>
-              <ShapeCameraOverlay
-                mode="project"
-                shape={shape}
-                layout={layout}
-                photos={photos}
-                draftRect={draftRect}
-                guideLineCells={NO_GUIDE_CELLS}
-              />
-            </View>
-          </GestureDetector>
-        ) : null}
+        <View
+          className="flex-1 bg-black overflow-hidden self-stretch"
+          onLayout={(event) => {
+            const { width, height } = event.nativeEvent.layout;
+            setLayout(computeOverlayLayout(width, height, gameRules.selectEdgeInsetPx));
+          }}
+        >
+          {layout ? (
+            <GestureDetector gesture={pan}>
+              <View style={StyleSheet.absoluteFill}>
+                <ShapeCameraOverlay
+                  mode="project"
+                  shape={shape}
+                  layout={layout}
+                  photos={photos}
+                  draftRect={draftRect}
+                  guideLineCells={NO_GUIDE_CELLS}
+                />
+              </View>
+            </GestureDetector>
+          ) : null}
+        </View>
       </View>
 
-      <View style={[styles.hud, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <View style={styles.topBar}>
-          <Pressable style={styles.chipButton} onPress={() => router.back()}>
-            <Text style={styles.chipText}>Back</Text>
-          </Pressable>
-          <Text style={styles.title}>Select region</Text>
-          <Text style={styles.counter}>
+      <Surface
+        className="gap-3 px-4 pt-3 rounded-none"
+        style={{ paddingBottom: Math.max(insets.bottom, FRAME_PAD) }}
+      >
+        <View className="gap-1.5">
+          <Button variant="ghost" size="sm" className="self-start" onPress={() => router.back()}>
+            <Button.Label>Back</Button.Label>
+          </Button>
+          <Text
+            className="text-xl text-foreground leading-none"
+            style={{ fontFamily: 'Anton-Regular' }}
+          >
+            Select region
+          </Text>
+          <Text className="text-foreground font-bold text-lg">
             {Math.round(fraction * 100)}% / max {maxPct}%
           </Text>
-          <Text style={styles.hint}>Drag a rectangle over the project grid.</Text>
+          <Text className="text-muted text-sm">Drag a rectangle over the project grid.</Text>
+          <View className="min-h-5 justify-center">
+            {dragHint || statusMessage ? (
+              <Text className="text-danger font-medium text-sm">{dragHint ?? statusMessage}</Text>
+            ) : null}
+          </View>
         </View>
 
-        {dragHint || statusMessage ? (
-          <Text style={styles.status}>{dragHint ?? statusMessage}</Text>
-        ) : null}
-
-        <View style={styles.controls}>
-          <Pressable style={styles.modeButton} onPress={clearDraft}>
-            <Text style={styles.modeButtonText}>Clear</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.continueButton, !canContinue && styles.continueDisabled]}
-            disabled={!canContinue}
+        <View className="flex-row items-center gap-3 min-h-14">
+          <Button variant="secondary" onPress={clearDraft}>
+            <Button.Label>Clear</Button.Label>
+          </Button>
+          <Button
+            className="flex-1"
+            isDisabled={!canContinue}
             onPress={() => router.push('/camera')}
           >
-            <Text style={styles.continueText}>Take photo</Text>
-          </Pressable>
+            <Button.Label>Take photo</Button.Label>
+          </Button>
         </View>
-      </View>
+      </Surface>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  completeRoot: {
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    gap: 16,
-  },
-  stage: {
-    flex: 1,
-    backgroundColor: '#0a0c0e',
-  },
-  hud: {
-    backgroundColor: colors.card,
-    paddingTop: 12,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  topBar: {
-    gap: 6,
-  },
-  chipButton: {
-    alignSelf: 'flex-start',
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  chipText: {
-    fontFamily: 'DMSans_500Medium',
-    color: colors.accent,
-    fontSize: 16,
-  },
-  title: {
-    fontFamily: 'DMSans_700Bold',
-    color: colors.text,
-    fontSize: 20,
-  },
-  counter: {
-    fontFamily: 'DMSans_700Bold',
-    color: colors.text,
-    fontSize: 18,
-  },
-  hint: {
-    fontFamily: 'DMSans_400Regular',
-    color: colors.textMuted,
-    fontSize: 14,
-  },
-  status: {
-    fontFamily: 'DMSans_500Medium',
-    color: colors.photo.coral,
-    fontSize: 14,
-  },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    minHeight: 56,
-  },
-  modeButton: {
-    minWidth: 88,
-    minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  modeButtonText: {
-    fontFamily: 'DMSans_500Medium',
-    color: colors.text,
-    fontSize: 14,
-  },
-  continueButton: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 12,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  continueDisabled: {
-    opacity: 0.4,
-  },
-  continueText: {
-    fontFamily: 'DMSans_700Bold',
-    color: colors.background,
-    fontSize: 16,
-  },
-});

@@ -32,8 +32,12 @@ export type HuntPhoto = {
 };
 
 type PendingShot = {
-  uri: string;
-  score: ScoreMatchResult;
+  /** Stable id for this shutter — ignore late scores after Retake. */
+  captureId: string;
+  /** Null until takePictureAsync returns (result shows Capturing…). */
+  uri: string | null;
+  /** Null while scoring is still running after an instant jump to result. */
+  score: ScoreMatchResult | null;
   /** Preview size when the shot was taken — required to crop the claim snippet. */
   viewSize: { width: number; height: number };
   /** Fit window when the shot was taken — required to crop the claim snippet. */
@@ -105,6 +109,10 @@ export const useHuntStore = create<HuntState>((set, get) => ({
     const { draftRect, lockedCells, photos, pendingShot } = get();
     if (!draftRect || !pendingShot) {
       set({ statusMessage: 'No photo to keep' });
+      return false;
+    }
+    if (!pendingShot.uri || !pendingShot.score) {
+      set({ statusMessage: 'Still capturing — wait a moment' });
       return false;
     }
 

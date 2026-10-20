@@ -46,3 +46,7 @@ example
 # local debug / scratch
 .cursor/
 tmp/
+
+# HeroUI Pro agent skills (licensed - do not commit)
+/.cursor/skills/heroui-native-pro/
+/.cursor/skills/heroui-pro-design-taste/

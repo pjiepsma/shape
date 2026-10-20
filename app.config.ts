@@ -54,16 +54,16 @@ const debugIngestHost = resolveDebugIngestHost();
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'Shape Hunt',
-  slug: 'shape',
+  name: 'Outsee',
+  slug: 'outsee',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
-  scheme: 'shapehunt',
+  scheme: 'outsee',
   userInterfaceStyle: 'dark',
   ios: {
     supportsTablet: false,
-    bundleIdentifier: 'com.shapehunt.app',
+    bundleIdentifier: 'com.outsee.app',
     icon: './assets/expo.icon',
     infoPlist: {
       NSAppTransportSecurity: {
@@ -72,7 +72,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
   },
   android: {
-    package: 'com.shapehunt.app',
+    package: 'com.outsee.app',
     adaptiveIcon: {
       backgroundColor: '#14171A',
       foregroundImage: './assets/images/android-icon-foreground.png',
@@ -102,7 +102,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-camera',
       {
         cameraPermission:
-          'Shape Hunt needs the camera so you can photograph real-world edges that match today’s outline.',
+          'Outsee needs the camera so you can photograph real-world edges that match today’s outline.',
         recordAudioAndroid: false,
       },
     ],
@@ -120,6 +120,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     reactCompiler: true,
   },
   extra: {
+    websiteUrl: 'https://outsee.app',
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
     /** Physical-device → Mac Cursor ingest (`:7482`). Empty if LAN IP unknown. */

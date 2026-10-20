@@ -1,5 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Button, Spinner, Surface } from 'heroui-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,8 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraFitOverlay } from '@/camera/CameraFitOverlay';
 import { postScoreDebugCapture } from '@/camera/debugCaptureLog';
 import { loadGrayImage } from '@/camera/loadGrayImage';
+import { normalizeCaptureUri } from '@/camera/normalizeCaptureUri';
 import { computeFitOverlayLayout } from '@/camera/overlayLayout';
-import { readJpegExifOrientation } from '@/camera/readJpegExifOrientation';
 import { gameRules } from '@/config/gameRules';
 import {
   buildScoreMatchCaptureLog,
@@ -17,10 +19,8 @@ import {
   pawnShape,
   scoreMatch,
   templatePointsInRect,
-  type GrayImage,
 } from '@/shapeEngine';
-import { useHuntStore } from '@/store/huntStore';
-import { colors } from '@/theme/colors';
+import { isHuntComplete, useHuntStore } from '@/store/huntStore';
 
 type LifecycleEvent = {
   t: number;
@@ -66,26 +66,45 @@ export default function CameraScreen() {
   const mountIdRef = useRef(0);
   const [viewSize, setViewSize] = useState<{ width: number; height: number } | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const [captureBusy, setCaptureBusy] = useState(false);
+  const captureBusyRef = useRef(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [keeping, setKeeping] = useState(false);
 
-  // Baseline that previously reproduced flips: remount CameraView on blur.
-  // No pictureSize cap, no EXIF bake — proof run only.
+  // Keep CameraView mounted while captureBusy so takePictureAsync survives blur.
   useFocusEffect(
     useCallback(() => {
       setIsFocused(true);
       pushLifecycle('focus', mountIdRef.current);
       return () => {
         setIsFocused(false);
-        setCameraReady(false);
+        if (!captureBusyRef.current) {
+          setCameraReady(false);
+        }
         pushLifecycle('blur', mountIdRef.current);
       };
     }, []),
   );
 
   const shape = useMemo(() => buildShape(pawnShape), []);
+  const lineCellIndexes = useMemo(
+    () => new Set(shape.lineCells.map((cell) => cell.index)),
+    [shape.lineCells],
+  );
+
   const draftRect = useHuntStore((state) => state.draftRect);
+  const pendingShot = useHuntStore((state) => state.pendingShot);
+  const statusMessage = useHuntStore((state) => state.statusMessage);
   const setPendingShot = useHuntStore((state) => state.setPendingShot);
+  const setStatusMessage = useHuntStore((state) => state.setStatusMessage);
+  const keepPhoto = useHuntStore((state) => state.keepPhoto);
+
+  const reviewing = pendingShot !== null;
+  const reviewCapturing = reviewing && pendingShot.uri === null;
+  const reviewScoring = reviewing && pendingShot.uri !== null && pendingShot.score === null;
+  const reviewBusy = reviewCapturing || reviewScoring;
+  const scorePct = pendingShot?.score ? Math.round(pendingShot.score.score * 100) : null;
 
   const guideLineCells = useMemo(() => {
     if (!draftRect) {
@@ -102,20 +121,23 @@ export default function CameraScreen() {
     return templatePointsInRect(shape.samples, draftRect, shape.definition.gridSize);
   }, [draftRect, shape.definition.gridSize, shape.samples]);
 
+  /** Freeze geometry while reviewing so HUD resize does not move the aura/line. */
+  const overlayViewSize = reviewing && pendingShot ? pendingShot.viewSize : viewSize;
+
   const layout = useMemo(() => {
-    if (!viewSize || !draftRect || viewSize.width <= 0 || viewSize.height <= 0) {
+    if (!overlayViewSize || !draftRect || overlayViewSize.width <= 0 || overlayViewSize.height <= 0) {
       return null;
     }
     return computeFitOverlayLayout(
-      viewSize.width,
-      viewSize.height,
+      overlayViewSize.width,
+      overlayViewSize.height,
       draftRect,
       shape.definition.gridSize,
     );
-  }, [draftRect, shape.definition.gridSize, viewSize]);
+  }, [draftRect, overlayViewSize, shape.definition.gridSize]);
 
   const onShutter = async () => {
-    if (capturing || !draftRect) {
+    if (capturing || reviewing || !draftRect) {
       return;
     }
     if (!cameraReady) {
@@ -134,56 +156,98 @@ export default function CameraScreen() {
       setErrorMessage('Camera layout not ready — wait a moment and try again.');
       throw new Error('Camera shutter blocked: overlay layout null');
     }
+    if (!viewSize) {
+      setErrorMessage('Camera layout missing — retake after the outline appears.');
+      return;
+    }
+    if (!cameraRef.current) {
+      setErrorMessage('Camera not ready');
+      return;
+    }
+
+    const viewWindow = layout.window;
+    const captureId = `cap-${Date.now()}`;
+    const shutterStartedAt = Date.now();
+
     setCapturing(true);
     setErrorMessage(null);
+    captureBusyRef.current = true;
+    setCaptureBusy(true);
+
+    setPendingShot({
+      captureId,
+      uri: null,
+      score: null,
+      viewSize,
+      viewWindow,
+    });
+
     try {
-      if (!cameraRef.current) {
-        setErrorMessage('Camera not ready');
-        return;
-      }
       const photo = await cameraRef.current.takePictureAsync({
         quality: gameRules.storage.jpegQuality,
-        skipProcessing: false,
+        skipProcessing: true,
+        shutterSound: true,
       });
-      const uri = photo?.uri;
-      if (!uri) {
-        setErrorMessage('Could not capture photo');
+      const rawUri = photo?.uri;
+      if (!rawUri) {
+        throw new Error('Could not capture photo');
+      }
+
+      const stillPending = useHuntStore.getState().pendingShot;
+      if (!stillPending || stillPending.captureId !== captureId) {
         return;
       }
 
-      const viewWindow = layout.window;
-      if (!viewSize) {
-        setErrorMessage('Camera layout missing — retake after the outline appears.');
-        throw new Error('Shutter blocked: viewSize missing for claim crop');
+      // Snappy freeze: show raw frame, then swap to EXIF-baked URI before score.
+      setPendingShot({
+        captureId,
+        uri: rawUri,
+        score: null,
+        viewSize,
+        viewWindow,
+      });
+
+      captureBusyRef.current = false;
+      setCaptureBusy(false);
+      setCapturing(false);
+      setCameraReady(false);
+
+      const normalized = await normalizeCaptureUri(rawUri);
+      const uri = normalized.uri;
+
+      const afterNormalize = useHuntStore.getState().pendingShot;
+      if (!afterNormalize || afterNormalize.captureId !== captureId) {
+        return;
       }
+      setPendingShot({
+        captureId,
+        uri,
+        score: null,
+        viewSize,
+        viewWindow,
+      });
 
       const gray = await loadGrayImage(uri, gameRules.scoring.downscaleWidth);
-      const scoreArgs = {
+      const score = scoreMatch({
         image: gray,
         templatePoints,
         viewWindow,
         viewSize,
-      };
-      const score = scoreMatch(scoreArgs);
+      });
 
-      // Proof only — never rewrite the photo from this.
-      const scoreFlipX = scoreMatch({ ...scoreArgs, image: flipGrayX(gray) });
-      const scoreFlipY = scoreMatch({ ...scoreArgs, image: flipGrayY(gray) });
-      const scoreRot180 = scoreMatch({ ...scoreArgs, image: flipGrayY(flipGrayX(gray)) });
-      let exifOrientation: number | null = null;
-      try {
-        exifOrientation = await readJpegExifOrientation(uri);
-      } catch {
-        exifOrientation = null;
+      const shutterMs = Date.now() - shutterStartedAt;
+      const pending = useHuntStore.getState().pendingShot;
+      if (!pending || pending.captureId !== captureId) {
+        return;
       }
 
-      const probeWinner =
-        bestOf([
-          { id: 'normal', score: score.score, hits: score.debug.rawHits },
-          { id: 'flipX', score: scoreFlipX.score, hits: scoreFlipX.debug.rawHits },
-          { id: 'flipY', score: scoreFlipY.score, hits: scoreFlipY.debug.rawHits },
-          { id: 'rot180', score: scoreRot180.score, hits: scoreRot180.debug.rawHits },
-        ]) ?? 'normal';
+      setPendingShot({
+        captureId,
+        uri,
+        score,
+        viewSize,
+        viewWindow,
+      });
 
       // #region agent log
       const proof = {
@@ -191,15 +255,19 @@ export default function CameraScreen() {
         cameraReady,
         isFocused,
         lifecycleRecent: lifecycleLog.slice(-12),
-        photoNative: { w: photo.width, h: photo.height },
+        skipProcessing: true,
+        alwaysNormalize: true,
+        shutterMs,
+        photoNativePre: { w: photo.width, h: photo.height },
+        photoNativePost: { w: normalized.width, h: normalized.height },
         skiaSource: { w: gray.sourceWidth, h: gray.sourceHeight },
         gray: { w: gray.width, h: gray.height },
         viewSize,
-        exifOrientation,
         dimsAgree:
-          photo.width === gray.sourceWidth && photo.height === gray.sourceHeight,
+          normalized.width === gray.sourceWidth && normalized.height === gray.sourceHeight,
         aspectClass: {
-          photoPortrait: photo.height >= photo.width,
+          photoPortraitPre: photo.height >= photo.width,
+          photoPortraitPost: normalized.height >= normalized.width,
           skiaPortrait: gray.sourceHeight >= gray.sourceWidth,
           viewPortrait: viewSize.height >= viewSize.width,
         },
@@ -210,27 +278,6 @@ export default function CameraScreen() {
           shiftX: score.debug.shiftX,
           shiftY: score.debug.shiftY,
         },
-        scoreFlipX: {
-          score: scoreFlipX.score,
-          rawHits: scoreFlipX.debug.rawHits,
-        },
-        scoreFlipY: {
-          score: scoreFlipY.score,
-          rawHits: scoreFlipY.debug.rawHits,
-        },
-        scoreRot180: {
-          score: scoreRot180.score,
-          rawHits: scoreRot180.debug.rawHits,
-        },
-        probeWinner,
-        // Clear signal: buffer orientation ≠ aimed silhouette
-        bufferMismatch:
-          probeWinner !== 'normal' &&
-          (probeWinner === 'flipY'
-            ? scoreFlipY.score > score.score + 0.15
-            : probeWinner === 'flipX'
-              ? scoreFlipX.score > score.score + 0.15
-              : scoreRot180.score > score.score + 0.15),
       };
       fetch('http://127.0.0.1:7482/ingest/607d09ba-1f8f-4fdb-91b5-28274c52e0a7', {
         method: 'POST',
@@ -243,12 +290,13 @@ export default function CameraScreen() {
           runId: 'proof',
           hypothesisId: 'PROOF-shutter',
           location: 'camera.tsx:onShutter',
-          message: 'capture proof bundle (no rewrite)',
+          message: 'capture proof bundle (in-place review)',
           data: proof,
           timestamp: Date.now(),
         }),
       }).catch(() => {});
       console.log(`CAPTURE_PROOF_JSON=${JSON.stringify(proof)}`);
+      console.log(`SHUTTER_MS=${shutterMs}`);
       // #endregion
 
       const captureLog = buildScoreMatchCaptureLog({
@@ -257,189 +305,277 @@ export default function CameraScreen() {
         score,
       });
       console.log(`SCORE_MATCH_DEBUG_JSON=${JSON.stringify(captureLog)}`);
-      setPendingShot({ uri, score, viewSize, viewWindow });
-      router.push('/result');
-      // #region agent log
-      await postScoreDebugCapture({
-        runId: 'proof-capture',
-        hypothesisId: 'PROOF-shutter',
-        message: 'proof capture with gray',
-        gray,
-        photoUri: uri,
-        data: {
-          ...captureLog,
-          ...proof,
-          templatePointCount: templatePoints.length,
-          nextFix: captureLog.nextFix,
-        },
-      });
-      // #endregion
+
+      const runDebug = async () => {
+        await postScoreDebugCapture({
+          runId: 'proof-capture',
+          hypothesisId: 'PROOF-shutter',
+          message: 'proof capture with gray',
+          gray,
+          photoUri: uri,
+          data: {
+            ...captureLog,
+            ...proof,
+            templatePointCount: templatePoints.length,
+            nextFix: captureLog.nextFix,
+          },
+        });
+      };
+      runDebug().catch(() => {});
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Scoring failed';
-      setErrorMessage(message);
-    } finally {
+      captureBusyRef.current = false;
+      setCaptureBusy(false);
       setCapturing(false);
+      setCameraReady(false);
+      const pending = useHuntStore.getState().pendingShot;
+      if (pending?.captureId === captureId) {
+        setStatusMessage(message);
+        return;
+      }
+      setErrorMessage(message);
+    }
+  };
+
+  const onRetake = () => {
+    setPendingShot(null);
+    setErrorMessage(null);
+    setCameraReady(false);
+  };
+
+  const onKeep = async () => {
+    if (reviewBusy || keeping || !pendingShot) {
+      return;
+    }
+    setKeeping(true);
+    try {
+      const gridSize = shape.definition.gridSize;
+      const ok = await keepPhoto({
+        lineCellIndexes,
+        gridSize,
+      });
+      if (!ok) {
+        return;
+      }
+      const lockedCount = useHuntStore.getState().lockedCells.length;
+      if (isHuntComplete(lockedCount, gridSize)) {
+        if (router.canDismiss()) {
+          router.dismissTo('/complete');
+        } else {
+          router.replace('/complete');
+        }
+        return;
+      }
+      if (router.canDismiss()) {
+        router.dismissTo('/');
+      } else {
+        router.replace('/');
+      }
+    } finally {
+      setKeeping(false);
     }
   };
 
   if (!draftRect) {
     return (
-      <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
-        <Text style={styles.permissionTitle}>Select a region first</Text>
-        <Pressable style={styles.primaryButton} onPress={() => router.replace('/select')}>
-          <Text style={styles.primaryButtonText}>Go to select</Text>
-        </Pressable>
+      <View
+        className="flex-1 bg-background justify-center px-6 gap-4"
+        style={{ paddingTop: insets.top }}
+      >
+        <Text
+          className="text-3xl text-foreground leading-none"
+          style={{ fontFamily: 'Anton-Regular' }}
+        >
+          Select a region first
+        </Text>
+        <Button size="lg" onPress={() => router.replace('/select')}>
+          <Button.Label>Go to select</Button.Label>
+        </Button>
       </View>
     );
   }
 
   if (permission && !permission.granted) {
     return (
-      <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
-        <Text style={styles.permissionTitle}>Camera access</Text>
-        <Text style={styles.permissionBody}>
-          Shape Hunt needs the camera so you can photograph real-world edges that match today’s
+      <View
+        className="flex-1 bg-background justify-center px-6 gap-4"
+        style={{ paddingTop: insets.top }}
+      >
+        <Text
+          className="text-3xl text-foreground leading-none"
+          style={{ fontFamily: 'Anton-Regular' }}
+        >
+          Camera access
+        </Text>
+        <Text className="text-muted text-base leading-6">
+          Outsee needs the camera so you can photograph real-world edges that match today’s
           outline. Photos are taken live — nothing is chosen from your camera roll.
         </Text>
-        <Pressable style={styles.primaryButton} onPress={requestPermission}>
-          <Text style={styles.primaryButtonText}>Allow camera</Text>
-        </Pressable>
-        <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
-          <Text style={styles.secondaryButtonText}>Back</Text>
-        </Pressable>
+        <Button size="lg" onPress={requestPermission}>
+          <Button.Label>Allow camera</Button.Label>
+        </Button>
+        <Button variant="ghost" onPress={() => router.back()}>
+          <Button.Label>Back</Button.Label>
+        </Button>
       </View>
     );
   }
 
+  const showLiveCamera =
+    permission?.granted &&
+    (isFocused || captureBusy) &&
+    (!reviewing || reviewCapturing || captureBusy);
+
+  const reviewHeadline = reviewCapturing
+    ? 'Capturing…'
+    : reviewScoring
+      ? 'Scoring…'
+      : `${scorePct}% line overlap`;
+
+  const reviewMuted = reviewCapturing
+    ? 'Locking the frame'
+    : reviewScoring
+      ? 'Computing overlap'
+      : 'Tap Keep to lock this claim';
+
+  const FRAME_PAD = 16;
+  const ACTIONS_MIN_H = 88;
+  const dockPadBottom = Math.max(insets.bottom, FRAME_PAD);
+
   return (
-    <View style={styles.root}>
+    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
       <View
-        style={styles.stage}
-        onLayout={(event) => {
-          const { width, height } = event.nativeEvent.layout;
-          if (width <= 0 || height <= 0) {
-            return;
-          }
-          setViewSize((prev) =>
-            prev && prev.width === width && prev.height === height ? prev : { width, height },
-          );
+        className="flex-1"
+        style={{
+          paddingTop: FRAME_PAD,
+          paddingLeft: FRAME_PAD,
+          paddingRight: FRAME_PAD,
+          paddingBottom: FRAME_PAD,
         }}
       >
-        {permission?.granted && isFocused ? (
-          <CameraView
-            ref={cameraRef}
-            style={styles.camera}
-            facing="back"
-            mode="picture"
-            onCameraReady={() => {
-              mountCounter += 1;
-              mountIdRef.current = mountCounter;
-              setCameraReady(true);
-              pushLifecycle('cameraReady', mountIdRef.current);
-            }}
-          />
-        ) : null}
-
-        {layout ? (
-          <View style={styles.overlay} pointerEvents="none" collapsable={false}>
-            <CameraFitOverlay
-              shape={shape}
-              layout={layout}
-              window={layout.window}
-              draftRect={draftRect}
-              guideLineCells={guideLineCells}
+        <View
+          className="bg-black overflow-hidden flex-1 self-stretch"
+          onLayout={(event) => {
+            if (reviewing) {
+              return;
+            }
+            const { width, height } = event.nativeEvent.layout;
+            if (width <= 0 || height <= 0) {
+              return;
+            }
+            setViewSize((prev) =>
+              prev && prev.width === width && prev.height === height ? prev : { width, height },
+            );
+          }}
+        >
+          {showLiveCamera ? (
+            <CameraView
+              ref={cameraRef}
+              style={styles.camera}
+              facing="back"
+              mode="picture"
+              onCameraReady={() => {
+                mountCounter += 1;
+                mountIdRef.current = mountCounter;
+                setCameraReady(true);
+                pushLifecycle('cameraReady', mountIdRef.current);
+              }}
             />
-          </View>
-        ) : (
-          <View style={styles.overlay} pointerEvents="none" collapsable={false}>
-            <Text style={styles.status}>Waiting for camera layout…</Text>
-          </View>
-        )}
+          ) : null}
+
+          {pendingShot?.uri ? (
+            <Image source={{ uri: pendingShot.uri }} style={styles.camera} contentFit="cover" />
+          ) : null}
+
+          {layout ? (
+            <View style={styles.overlay} pointerEvents="none" collapsable={false}>
+              <CameraFitOverlay
+                shape={shape}
+                layout={layout}
+                window={pendingShot?.viewWindow ?? layout.window}
+                draftRect={draftRect}
+                guideLineCells={guideLineCells}
+              />
+            </View>
+          ) : !reviewing ? (
+            <View style={styles.overlay} pointerEvents="none" collapsable={false}>
+              <Text className="text-danger font-medium text-sm m-4">Waiting for camera layout…</Text>
+            </View>
+          ) : null}
+
+          {reviewBusy ? (
+            <View style={styles.scoringScrim} pointerEvents="none">
+              <Spinner size="lg" color="default" />
+            </View>
+          ) : null}
+        </View>
       </View>
 
-      <View style={[styles.hud, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <View style={styles.topBar}>
-          <Pressable style={styles.chipButton} onPress={() => router.back()}>
-            <Text style={styles.chipText}>Back</Text>
-          </Pressable>
-          <Text style={styles.counter}>Align the outline, then shoot</Text>
-          <Text style={styles.counterMuted}>
-            {guideLineCells.length} line cells · proof logging on
+      <Surface
+        className="gap-3 px-4 pt-3 rounded-none"
+        style={{ paddingBottom: dockPadBottom }}
+      >
+        <View className="gap-1.5">
+          <View className="min-h-9 justify-center">
+            {reviewing ? null : (
+              <Button variant="ghost" size="sm" className="self-start" onPress={() => router.back()}>
+                <Button.Label>Back</Button.Label>
+              </Button>
+            )}
+          </View>
+          <View className="flex-row items-center gap-2.5 min-h-[26px]">
+            {reviewing && reviewBusy ? <Spinner size="sm" color="default" /> : null}
+            <Text
+              className="text-xl text-foreground leading-none"
+              style={{ fontFamily: 'Anton-Regular' }}
+            >
+              {reviewing ? reviewHeadline : 'Align the outline, then shoot'}
+            </Text>
+          </View>
+          <Text className="text-muted text-sm">
+            {reviewing ? reviewMuted : 'Match the lime outline in the world.'}
           </Text>
+          <View className="min-h-5 justify-center">
+            {(reviewing ? statusMessage : errorMessage) ? (
+              <Text className="text-danger font-medium text-sm">
+                {reviewing ? statusMessage : errorMessage}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
-        {errorMessage ? <Text style={styles.status}>{errorMessage}</Text> : null}
-
-        <View style={styles.controls}>
-          <View style={styles.spacer} />
-          <Pressable
-            style={[styles.shutter, (capturing || !cameraReady) && styles.shutterDisabled]}
-            onPress={onShutter}
-            disabled={capturing || !cameraReady}
-          >
-            <View style={styles.shutterInner} />
-          </Pressable>
-          <View style={styles.spacer} />
+        <View
+          className="flex-row items-center justify-center gap-3"
+          style={{ minHeight: ACTIONS_MIN_H }}
+        >
+          {reviewing ? (
+            <>
+              <Button className="flex-1" variant="outline" onPress={onRetake}>
+                <Button.Label>Retake</Button.Label>
+              </Button>
+              <Button className="flex-1" isDisabled={reviewBusy || keeping} onPress={onKeep}>
+                <Button.Label>Keep</Button.Label>
+              </Button>
+            </>
+          ) : (
+            <Pressable
+              className={`size-[76px] rounded-full border-[3px] border-foreground items-center justify-center ${
+                capturing || !cameraReady ? 'opacity-50' : ''
+              }`}
+              onPress={onShutter}
+              disabled={capturing || !cameraReady}
+              accessibilityLabel="Shutter"
+            >
+              <View className="size-[58px] rounded-full bg-accent" />
+            </Pressable>
+          )}
         </View>
-      </View>
+      </Surface>
     </View>
   );
 }
 
-function flipGrayX(image: GrayImage): GrayImage {
-  const pixels = new Uint8Array(image.pixels.length);
-  for (let y = 0; y < image.height; y += 1) {
-    const row = y * image.width;
-    for (let x = 0; x < image.width; x += 1) {
-      pixels[row + (image.width - 1 - x)] = image.pixels[row + x] ?? 0;
-    }
-  }
-  return { width: image.width, height: image.height, pixels };
-}
-
-function flipGrayY(image: GrayImage): GrayImage {
-  const pixels = new Uint8Array(image.pixels.length);
-  for (let y = 0; y < image.height; y += 1) {
-    const src = y * image.width;
-    const dst = (image.height - 1 - y) * image.width;
-    pixels.set(image.pixels.subarray(src, src + image.width), dst);
-  }
-  return { width: image.width, height: image.height, pixels };
-}
-
-function bestOf(
-  rows: { id: string; score: number; hits: number }[],
-): string | null {
-  let best = rows[0];
-  if (!best) {
-    return null;
-  }
-  for (const row of rows) {
-    if (row.score > best.score + 0.001) {
-      best = row;
-      continue;
-    }
-    if (Math.abs(row.score - best.score) <= 0.001 && row.hits > best.hits) {
-      best = row;
-    }
-  }
-  return best.id;
-}
-
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  centered: {
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    gap: 16,
-  },
-  stage: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
   camera: {
     ...StyleSheet.absoluteFill,
     zIndex: 0,
@@ -450,100 +586,12 @@ const styles = StyleSheet.create({
     zIndex: 10,
     elevation: 10,
   },
-  hud: {
-    backgroundColor: colors.card,
-    paddingTop: 12,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  topBar: {
-    gap: 6,
-  },
-  chipButton: {
-    alignSelf: 'flex-start',
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  chipText: {
-    fontFamily: 'DMSans_500Medium',
-    color: colors.accent,
-    fontSize: 16,
-  },
-  counter: {
-    fontFamily: 'DMSans_700Bold',
-    color: colors.text,
-    fontSize: 18,
-  },
-  counterMuted: {
-    fontFamily: 'DMSans_400Regular',
-    color: colors.textMuted,
-    fontSize: 14,
-  },
-  status: {
-    fontFamily: 'DMSans_500Medium',
-    color: colors.photo.coral,
-    fontSize: 14,
-  },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 88,
-  },
-  spacer: {
-    width: 88,
-  },
-  shutter: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 3,
-    borderColor: colors.text,
+  scoringScrim: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 11,
+    elevation: 11,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  shutterDisabled: {
-    opacity: 0.5,
-  },
-  shutterInner: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.accent,
-  },
-  permissionTitle: {
-    fontFamily: 'DMSans_700Bold',
-    fontSize: 24,
-    color: colors.text,
-  },
-  permissionBody: {
-    fontFamily: 'DMSans_400Regular',
-    fontSize: 16,
-    lineHeight: 24,
-    color: colors.textMuted,
-  },
-  primaryButton: {
-    minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  primaryButtonText: {
-    fontFamily: 'DMSans_700Bold',
-    color: colors.background,
-    fontSize: 16,
-  },
-  secondaryButton: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    fontFamily: 'DMSans_500Medium',
-    color: colors.textMuted,
-    fontSize: 16,
+    backgroundColor: 'rgba(0,0,0,0.28)',
   },
 });

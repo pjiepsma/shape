@@ -1,6 +1,8 @@
-# Shape Hunt
+# Outsee
 
 Daily mobile game: rebuild a shared outline from live camera photos. MVP built with Expo SDK 58, React Native, TypeScript, and Supabase.
+
+Site: [outsee.app](https://outsee.app) (domain claimed; DNS / hosting not wired yet).
 
 ## Decision: local Android builds only
 
@@ -21,7 +23,7 @@ SDK 58 needs a **development build** (not Expo Go). `expo-dev-client` + local AP
 
 ### 1. Supabase project
 
-1. Create a Free project named **Shape Hunt**.
+1. Create a Free project named **Outsee**.
 2. Project Settings → API → copy **Project URL** and **anon public** key.
 3. Auth → Providers → enable **Anonymous Sign-Ins**.
 4. Copy [`.env.example`](.env.example) to `.env` and fill:
@@ -63,7 +65,7 @@ Then:
 npx expo start --dev-client
 ```
 
-Open the app on the phone. You should see the dark **Shape Hunt** home screen.
+Open the app on the phone. You should see the dark **Outsee** home screen.
 
 JS-only changes: restart Metro. Native module changes: run `npm run android:apk` again.
 
