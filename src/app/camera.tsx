@@ -17,8 +17,8 @@ import {
   buildScoreMatchCaptureLog,
   buildShape,
   lineCellsInRect,
-  pawnShape,
   scoreMatch,
+  shapeById,
   templatePointsInRect,
 } from '@/shapeEngine';
 import { isHuntComplete, useHuntStore } from '@/store/huntStore';
@@ -88,7 +88,8 @@ export default function CameraScreen() {
     }, []),
   );
 
-  const shape = useMemo(() => buildShape(pawnShape), []);
+  const shapeId = useHuntStore((state) => state.shapeId);
+  const shape = useMemo(() => buildShape(shapeById(shapeId)), [shapeId]);
   const lineCellIndexes = useMemo(
     () => new Set(shape.lineCells.map((cell) => cell.index)),
     [shape.lineCells],

@@ -9,7 +9,7 @@ import { ShapeCameraOverlay } from '@/camera/ShapeCameraOverlay';
 import { computeOverlayLayout, hitTestGridCell, type OverlayLayout } from '@/camera/overlayLayout';
 import { BackButton } from '@/components/BackButton';
 import { gameRules } from '@/config/gameRules';
-import { buildShape, pawnShape, type LineCell } from '@/shapeEngine';
+import { buildShape, shapeById, type LineCell } from '@/shapeEngine';
 import {
   draftClaimFraction,
   draftStatusMessage,
@@ -26,7 +26,8 @@ export default function SelectScreen() {
   const insets = useSafeAreaInsets();
   const [layout, setLayout] = useState<OverlayLayout | null>(null);
 
-  const shape = useMemo(() => buildShape(pawnShape), []);
+  const shapeId = useHuntStore((state) => state.shapeId);
+  const shape = useMemo(() => buildShape(shapeById(shapeId)), [shapeId]);
   const gridSize = shape.definition.gridSize;
   const lineCellIndexes = useMemo(
     () => new Set(shape.lineCells.map((cell) => cell.index)),

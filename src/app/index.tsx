@@ -9,7 +9,13 @@ import { ShapeCameraOverlay } from '@/camera/ShapeCameraOverlay';
 import { computeOverlayLayout, type OverlayLayout } from '@/camera/overlayLayout';
 import { gameRules } from '@/config/gameRules';
 import { getSupabase } from '@/lib/supabase';
-import { buildShape, claimFraction, pawnShape, projectCellCount, type LineCell } from '@/shapeEngine';
+import {
+  buildShape,
+  claimFraction,
+  projectCellCount,
+  shapeById,
+  type LineCell,
+} from '@/shapeEngine';
 import { isHuntComplete, useHuntStore } from '@/store/huntStore';
 
 const NO_GUIDE_CELLS: LineCell[] = [];
@@ -21,7 +27,9 @@ export default function HomeScreen() {
   const [permission, , getPermission] = useCameraPermissions();
   const [layout, setLayout] = useState<OverlayLayout | null>(null);
   const supabaseReady = getSupabase() !== null;
-  const shape = useMemo(() => buildShape(pawnShape), []);
+  const shapeId = useHuntStore((state) => state.shapeId);
+  const reshuffleShapeIfIdle = useHuntStore((state) => state.reshuffleShapeIfIdle);
+  const shape = useMemo(() => buildShape(shapeById(shapeId)), [shapeId]);
   const lockedCells = useHuntStore((state) => state.lockedCells);
   const photos = useHuntStore((state) => state.photos);
   const totalCells = projectCellCount(shape.definition.gridSize);
@@ -33,8 +41,10 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Demo: store init only runs once per JS session — reshuffle on each home open.
+      reshuffleShapeIfIdle();
       getPermission();
-    }, [getPermission]),
+    }, [getPermission, reshuffleShapeIfIdle]),
   );
 
   return (
@@ -65,8 +75,8 @@ export default function HomeScreen() {
           </Chip>
         </View>
         <Text className="text-foreground font-medium text-base">
-          Today’s pawn · {filledPct}% filled · {photos.length} photo
-          {photos.length === 1 ? '' : 's'}
+          Today’s {shape.definition.name.toLowerCase()} · {filledPct}% filled ·{' '}
+          {photos.length} photo{photos.length === 1 ? '' : 's'}
         </Text>
         <Text className="text-muted text-sm">
           {huntComplete

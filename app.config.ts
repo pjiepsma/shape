@@ -64,7 +64,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'com.outsee.app',
-    icon: './assets/expo.icon',
     infoPlist: {
       NSAppTransportSecurity: {
         NSAllowsLocalNetworking: true,
@@ -74,7 +73,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: 'com.outsee.app',
     adaptiveIcon: {
-      backgroundColor: '#14171A',
+      backgroundColor: '#E4EBE4',
       foregroundImage: './assets/images/android-icon-foreground.png',
       backgroundImage: './assets/images/android-icon-background.png',
       monochromeImage: './assets/images/android-icon-monochrome.png',
@@ -109,9 +108,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-splash-screen',
       {
-        backgroundColor: '#14171A',
+        backgroundColor: '#E4EBE4',
         image: './assets/images/splash-icon.png',
-        imageWidth: 76,
+        imageWidth: 200,
       },
     ],
   ],

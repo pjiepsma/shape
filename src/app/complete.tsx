@@ -15,7 +15,7 @@ import { gameRules } from '@/config/gameRules';
 import { getCachedDisplayName, loadProfile } from '@/lib/profile';
 import { getSupabase } from '@/lib/supabase';
 import { submitHuntResult } from '@/lib/submitHuntResult';
-import { buildShape, pawnShape, type LineCell } from '@/shapeEngine';
+import { buildShape, shapeById, type LineCell } from '@/shapeEngine';
 import { huntEndScore, isHuntComplete, useHuntStore } from '@/store/huntStore';
 
 const NO_GUIDE_CELLS: LineCell[] = [];
@@ -31,7 +31,8 @@ export default function CompleteScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const shape = useMemo(() => buildShape(pawnShape), []);
+  const shapeId = useHuntStore((state) => state.shapeId);
+  const shape = useMemo(() => buildShape(shapeById(shapeId)), [shapeId]);
   const gridSize = shape.definition.gridSize;
   const photos = useHuntStore((state) => state.photos);
   const lockedCells = useHuntStore((state) => state.lockedCells);

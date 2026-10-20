@@ -6,9 +6,11 @@ import {
   cellsInRect,
   claimFraction,
   normalizeRect,
+  pickRandomShapeId,
   projectCellCount,
   validateClaim,
   type GridRect,
+  type HuntShapeId,
   type ScoreMatchResult,
 } from '@/shapeEngine';
 import { colors } from '@/theme/colors';
@@ -45,6 +47,7 @@ type PendingShot = {
 };
 
 type HuntState = {
+  shapeId: HuntShapeId;
   lockedCells: number[];
   draftRect: GridRect | null;
   dragOrigin: { x: number; y: number } | null;
@@ -61,6 +64,8 @@ type HuntState = {
     lineCellIndexes: ReadonlySet<number>;
     gridSize: number;
   }) => Promise<boolean>;
+  /** Demo: new random outline when hunt has not started yet. */
+  reshuffleShapeIfIdle: () => void;
   resetHunt: () => void;
 };
 
@@ -69,6 +74,7 @@ function rectEquals(a: GridRect, b: GridRect): boolean {
 }
 
 export const useHuntStore = create<HuntState>((set, get) => ({
+  shapeId: pickRandomShapeId(),
   lockedCells: [],
   draftRect: null,
   dragOrigin: null,
@@ -175,8 +181,17 @@ export const useHuntStore = create<HuntState>((set, get) => ({
     return true;
   },
 
+  reshuffleShapeIfIdle: () => {
+    const { photos, lockedCells, shapeId } = get();
+    if (photos.length > 0 || lockedCells.length > 0) {
+      return;
+    }
+    set({ shapeId: pickRandomShapeId(shapeId) });
+  },
+
   resetHunt: () =>
     set({
+      shapeId: pickRandomShapeId(get().shapeId),
       lockedCells: [],
       draftRect: null,
       dragOrigin: null,

@@ -8,8 +8,8 @@ import {
   type OverlayLayout,
 } from '@/camera/overlayLayout';
 import { gameRules } from '@/config/gameRules';
-import { buildShape, pawnShape, type PathSample } from '@/shapeEngine';
-import type { HuntPhoto } from '@/store/huntStore';
+import { buildShape, shapeById, type PathSample } from '@/shapeEngine';
+import { useHuntStore, type HuntPhoto } from '@/store/huntStore';
 import { colors } from '@/theme/colors';
 
 const MOSAIC_BG = colors.background;
@@ -26,7 +26,7 @@ export async function composeHuntMosaic(photos: readonly HuntPhoto[]): Promise<s
 
   const size = gameRules.storage.uploadMaxWidth;
   const layout = computeOverlayLayout(size, size, 0);
-  const shape = buildShape(pawnShape);
+  const shape = buildShape(shapeById(useHuntStore.getState().shapeId));
   const gridSize = shape.definition.gridSize;
 
   const surface = Skia.Surface.MakeOffscreen(size, size);
