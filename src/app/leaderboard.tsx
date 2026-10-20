@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BackButton } from '@/components/BackButton';
 import {
   fetchAverageLeaderboard,
   fetchOverallLeaderboard,
@@ -126,9 +127,7 @@ export default function LeaderboardScreen() {
         paddingBottom: Math.max(insets.bottom, FRAME_PAD),
       }}
     >
-      <Button variant="ghost" size="sm" className="self-start mt-3" onPress={() => router.back()}>
-        <Button.Label>Back</Button.Label>
-      </Button>
+      <BackButton className="self-start mt-3" />
       <Text
         className="text-4xl text-accent leading-none"
         style={{ fontFamily: 'Anton-Regular' }}

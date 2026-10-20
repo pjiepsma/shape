@@ -16,7 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Uniwind } from 'uniwind';
 
 /** Must run before first paint — late setTheme leaves Reanimated with color "invalid". */
-Uniwind.setTheme('dark');
+Uniwind.setTheme('light');
 
 SplashScreen.preventAutoHideAsync();
 
@@ -63,7 +63,7 @@ export default function RootLayout() {
             pointerEvents="none"
             className="absolute h-0 w-0 overflow-hidden bg-accent bg-accent-hover bg-accent-foreground bg-default bg-default-hover bg-surface bg-surface-hover bg-danger bg-danger-hover bg-success bg-success-hover bg-warning bg-warning-hover bg-muted bg-overlay bg-border bg-foreground"
           />
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <Stack
             screenOptions={{
               headerShown: false,

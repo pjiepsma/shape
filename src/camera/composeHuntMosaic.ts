@@ -10,9 +10,10 @@ import {
 import { gameRules } from '@/config/gameRules';
 import { buildShape, pawnShape, type PathSample } from '@/shapeEngine';
 import type { HuntPhoto } from '@/store/huntStore';
+import { colors } from '@/theme/colors';
 
-const MOSAIC_BG = '#14171A';
-const OUTLINE_COLOR = '#C8F542';
+const MOSAIC_BG = colors.background;
+const OUTLINE_COLOR = colors.accent;
 
 /**
  * Compose the finished hunt collage (claim tiles + outline) into one JPEG

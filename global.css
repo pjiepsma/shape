@@ -17,6 +17,7 @@
   --theme: default;
 }
 
+/* Daylight outdoors — mist stone + olive accent (not neon lime / not black). */
 @layer theme {
   :root {
     @variant light {
@@ -26,6 +27,38 @@
       --font-bold: 'JetBrainsMono-Bold';
 
       --brutalism-font-display: 'Anton-Regular';
+
+      --background: oklch(0.93 0.012 145);
+      --foreground: oklch(0.22 0.03 155);
+
+      --surface: oklch(0.97 0.008 145);
+      --surface-foreground: oklch(0.22 0.03 155);
+      --surface-secondary: oklch(0.91 0.014 145);
+      --surface-secondary-foreground: oklch(0.22 0.03 155);
+      --surface-tertiary: oklch(0.88 0.016 145);
+      --surface-tertiary-foreground: oklch(0.22 0.03 155);
+
+      --overlay: oklch(0.98 0.006 145);
+      --overlay-foreground: oklch(0.22 0.03 155);
+      --backdrop: oklch(0.22 0.03 155 / 30%);
+
+      --muted: oklch(0.48 0.025 150);
+      --default: oklch(0.9 0.015 145);
+      --default-foreground: oklch(0.25 0.03 155);
+
+      /* Olive trail — organic, readable, not digital lime */
+      --accent: oklch(0.52 0.09 125);
+      --accent-foreground: oklch(0.97 0.01 145);
+
+      --field-background: var(--surface);
+      --field-foreground: var(--foreground);
+      --field-placeholder: var(--muted);
+      --field-border: oklch(0.78 0.03 140);
+
+      --border: oklch(0.78 0.035 140);
+      --separator: oklch(0.74 0.03 145);
+      --focus: var(--accent);
+      --link: oklch(0.45 0.08 145);
     }
 
     @variant dark {
@@ -35,6 +68,38 @@
       --font-bold: 'JetBrainsMono-Bold';
 
       --brutalism-font-display: 'Anton-Regular';
+
+      /* Soft dusk forest — not pure black */
+      --background: oklch(0.28 0.025 155);
+      --foreground: oklch(0.94 0.015 140);
+
+      --surface: oklch(0.33 0.028 155);
+      --surface-foreground: oklch(0.94 0.015 140);
+      --surface-secondary: oklch(0.36 0.026 155);
+      --surface-secondary-foreground: oklch(0.94 0.015 140);
+      --surface-tertiary: oklch(0.39 0.024 155);
+      --surface-tertiary-foreground: oklch(0.94 0.015 140);
+
+      --overlay: oklch(0.35 0.027 155);
+      --overlay-foreground: oklch(0.94 0.015 140);
+      --backdrop: oklch(0.2 0.02 155 / 45%);
+
+      --muted: oklch(0.7 0.025 150);
+      --default: oklch(0.38 0.03 155);
+      --default-foreground: oklch(0.94 0.015 140);
+
+      --accent: oklch(0.72 0.1 115);
+      --accent-foreground: oklch(0.22 0.03 155);
+
+      --field-background: var(--surface);
+      --field-foreground: var(--foreground);
+      --field-placeholder: var(--muted);
+      --field-border: oklch(0.5 0.04 140);
+
+      --border: oklch(0.5 0.04 140);
+      --separator: oklch(0.48 0.035 145);
+      --focus: var(--accent);
+      --link: var(--accent);
     }
   }
 }

@@ -29,7 +29,7 @@ type BaseProps = {
 /**
  * Two real UIs only — cannot express “camera with no outline”.
  * - project: select / complete (full grid + dashed white outline)
- * - fit: camera / result (zoomed claim + solid lime outline, always)
+ * - fit: camera / result (zoomed claim + solid accent outline, always)
  */
 export type ShapeCameraOverlayProps =
   | (BaseProps & { mode: 'project'; showClaimFills?: boolean })
@@ -46,8 +46,10 @@ type StaticLayerProps = {
 };
 
 /** Screen-space stroke — never go through Group scale (Android drops sub-px strokes). */
-const FIT_OUTLINE_STROKE_PX = 4;
-const PROJECT_OUTLINE_STROKE_PX = 2.5;
+const FIT_OUTLINE_STROKE_PX = 5;
+const FIT_OUTLINE_HALO_PX = 8;
+const PROJECT_OUTLINE_STROKE_PX = 3.5;
+const PROJECT_GRID_STROKE_PX = 1.25;
 
 export function ShapeCameraOverlay(props: ShapeCameraOverlayProps) {
   const { shape, layout, photos, draftRect, guideLineCells } = props;
@@ -225,7 +227,12 @@ const StaticOverlayLayer = memo(function StaticOverlayLayer({
   return (
     <>
       {gridPath ? (
-        <Path path={gridPath} style="stroke" strokeWidth={1} color="rgba(255,255,255,0.12)" />
+        <Path
+          path={gridPath}
+          style="stroke"
+          strokeWidth={PROJECT_GRID_STROKE_PX}
+          color={colors.grid}
+        />
       ) : null}
 
       {claimPaths.map((claim) => (
@@ -245,20 +252,30 @@ const StaticOverlayLayer = memo(function StaticOverlayLayer({
             width={size}
             height={size}
             color={colors.accent}
-            opacity={0.35}
+            opacity={0.45}
           />
         );
       })}
 
       {fitOutlinePath ? (
-        <Path
-          path={fitOutlinePath}
-          style="stroke"
-          strokeWidth={FIT_OUTLINE_STROKE_PX}
-          color={colors.accent}
-          strokeJoin="round"
-          strokeCap="round"
-        />
+        <>
+          <Path
+            path={fitOutlinePath}
+            style="stroke"
+            strokeWidth={FIT_OUTLINE_HALO_PX}
+            color={colors.outlineHalo}
+            strokeJoin="round"
+            strokeCap="round"
+          />
+          <Path
+            path={fitOutlinePath}
+            style="stroke"
+            strokeWidth={FIT_OUTLINE_STROKE_PX}
+            color={colors.outline}
+            strokeJoin="round"
+            strokeCap="round"
+          />
+        </>
       ) : null}
 
       {projectOutlinePath ? (
@@ -272,8 +289,20 @@ const StaticOverlayLayer = memo(function StaticOverlayLayer({
           <Path
             path={projectOutlinePath}
             style="stroke"
+            strokeWidth={projectStrokeWidth * 1.6}
+            color={colors.outlineHalo}
+            strokeJoin="round"
+            strokeCap="round"
+          >
+            <DashPathEffect
+              intervals={[10 / Math.max(layout.size, 1), 8 / Math.max(layout.size, 1)]}
+            />
+          </Path>
+          <Path
+            path={projectOutlinePath}
+            style="stroke"
             strokeWidth={projectStrokeWidth}
-            color="#FFFFFF"
+            color={colors.outline}
             strokeJoin="round"
             strokeCap="round"
           >

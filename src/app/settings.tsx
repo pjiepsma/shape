@@ -1,17 +1,17 @@
 import { useCameraPermissions } from 'expo-camera';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Button, Input, Label, Surface, TextField } from 'heroui-native';
 import { useCallback, useState } from 'react';
 import { Linking, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BackButton } from '@/components/BackButton';
 import { getCachedDisplayName, loadProfile, saveUsername } from '@/lib/profile';
 import { getSupabase } from '@/lib/supabase';
 
 const FRAME_PAD = 16;
 
 export default function SettingsScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission, getPermission] = useCameraPermissions();
   const [displayName, setDisplayName] = useState('');
@@ -83,9 +83,7 @@ export default function SettingsScreen() {
         paddingBottom: Math.max(insets.bottom, FRAME_PAD),
       }}
     >
-      <Button variant="ghost" size="sm" className="self-start mt-3" onPress={() => router.back()}>
-        <Button.Label>Back</Button.Label>
-      </Button>
+      <BackButton className="self-start mt-3" />
       <Text
         className="text-4xl text-accent leading-none"
         style={{ fontFamily: 'Anton-Regular' }}

@@ -14,7 +14,8 @@ type Props = {
   guideLineCells: readonly LineCell[];
 };
 
-const STROKE_PX = 4;
+const STROKE_PX = 5;
+const HALO_PX = 9;
 /** Subsample dense path samples so we stay under a few hundred Views. */
 const MAX_SEGMENTS = 120;
 
@@ -100,27 +101,40 @@ export function CameraFitOverlay({
       })}
 
       {segments.map((seg, index) => (
-        <View
-          key={`seg-${index}`}
-          style={[
-            styles.segment,
-            {
-              left: seg.left,
-              top: seg.top,
-              width: seg.length,
-              height: STROKE_PX,
-              transform: [{ rotate: `${seg.angleRad}rad` }],
-            },
-          ]}
-        />
+        <View key={`seg-${index}`}>
+          <View
+            style={[
+              styles.segmentHalo,
+              {
+                left: seg.midX - seg.length / 2,
+                top: seg.midY - HALO_PX / 2,
+                width: seg.length,
+                height: HALO_PX,
+                transform: [{ rotate: `${seg.angleRad}rad` }],
+              },
+            ]}
+          />
+          <View
+            style={[
+              styles.segment,
+              {
+                left: seg.midX - seg.length / 2,
+                top: seg.midY - STROKE_PX / 2,
+                width: seg.length,
+                height: STROKE_PX,
+                transform: [{ rotate: `${seg.angleRad}rad` }],
+              },
+            ]}
+          />
+        </View>
       ))}
     </View>
   );
 }
 
 type Segment = {
-  left: number;
-  top: number;
+  midX: number;
+  midY: number;
   length: number;
   angleRad: number;
 };
@@ -177,8 +191,8 @@ function buildScreenSegments(
     const midY = (a.y + b.y) / 2;
     // RN rotates around view center — anchor the segment on its midpoint.
     segments.push({
-      left: midX - length / 2,
-      top: midY - STROKE_PX / 2,
+      midX,
+      midY,
       length,
       angleRad,
     });
@@ -202,10 +216,14 @@ const styles = StyleSheet.create({
   guideCell: {
     position: 'absolute',
     backgroundColor: colors.accent,
-    opacity: 0.35,
+    opacity: 0.45,
+  },
+  segmentHalo: {
+    position: 'absolute',
+    backgroundColor: colors.outlineHalo,
   },
   segment: {
     position: 'absolute',
-    backgroundColor: colors.accent,
+    backgroundColor: colors.outline,
   },
 });

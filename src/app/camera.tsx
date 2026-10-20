@@ -11,6 +11,7 @@ import { postScoreDebugCapture } from '@/camera/debugCaptureLog';
 import { loadGrayImage } from '@/camera/loadGrayImage';
 import { normalizeCaptureUri } from '@/camera/normalizeCaptureUri';
 import { computeFitOverlayLayout } from '@/camera/overlayLayout';
+import { BackButton } from '@/components/BackButton';
 import { gameRules } from '@/config/gameRules';
 import {
   buildScoreMatchCaptureLog,
@@ -414,9 +415,7 @@ export default function CameraScreen() {
         <Button size="lg" onPress={requestPermission}>
           <Button.Label>Allow camera</Button.Label>
         </Button>
-        <Button variant="ghost" onPress={() => router.back()}>
-          <Button.Label>Back</Button.Label>
-        </Button>
+        <BackButton />
       </View>
     );
   }
@@ -454,7 +453,7 @@ export default function CameraScreen() {
         }}
       >
         <View
-          className="bg-black overflow-hidden flex-1 self-stretch"
+          className="bg-background overflow-hidden flex-1 self-stretch"
           onLayout={(event) => {
             if (reviewing) {
               return;
@@ -518,9 +517,7 @@ export default function CameraScreen() {
         <View className="gap-1.5">
           <View className="min-h-9 justify-center">
             {reviewing ? null : (
-              <Button variant="ghost" size="sm" className="self-start" onPress={() => router.back()}>
-                <Button.Label>Back</Button.Label>
-              </Button>
+              <BackButton />
             )}
           </View>
           <View className="flex-row items-center gap-2.5 min-h-[26px]">
@@ -533,7 +530,7 @@ export default function CameraScreen() {
             </Text>
           </View>
           <Text className="text-muted text-sm">
-            {reviewing ? reviewMuted : 'Match the lime outline in the world.'}
+            {reviewing ? reviewMuted : 'Match the outline in the world.'}
           </Text>
           <View className="min-h-5 justify-center">
             {(reviewing ? statusMessage : errorMessage) ? (

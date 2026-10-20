@@ -1,14 +1,19 @@
+/** Skia / RN style tokens — keep in sync with daylight outdoor theme in global.css */
 export const colors = {
-  background: '#14171A',
-  card: '#1E2327',
-  accent: '#D4FF3F',
-  text: '#FFFFFF',
-  textMuted: '#A9B1B8',
+  background: '#E4EBE4',
+  card: '#F3F6F2',
+  accent: '#6B7F3A',
+  text: '#1C2A22',
+  textMuted: '#5C6B62',
+  /** Grid / outline contrast on light stages and camera. */
+  grid: 'rgba(28, 42, 34, 0.28)',
+  outline: '#6B7F3A',
+  outlineHalo: 'rgba(28, 42, 34, 0.55)',
   photo: {
-    coral: '#FF8A5B',
-    sky: '#6EC1FF',
-    lime: '#D4FF3F',
-    violet: '#B79CFF',
-    gold: '#FFD166',
+    coral: '#D4845C',
+    sky: '#6A9BB8',
+    lime: '#6B7F3A',
+    violet: '#8B7AA8',
+    gold: '#C4A05A',
   },
 } as const;

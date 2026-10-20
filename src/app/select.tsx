@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ShapeCameraOverlay } from '@/camera/ShapeCameraOverlay';
 import { computeOverlayLayout, hitTestGridCell, type OverlayLayout } from '@/camera/overlayLayout';
+import { BackButton } from '@/components/BackButton';
 import { gameRules } from '@/config/gameRules';
 import { buildShape, pawnShape, type LineCell } from '@/shapeEngine';
 import {
@@ -158,7 +159,7 @@ export default function SelectScreen() {
         }}
       >
         <View
-          className="flex-1 bg-black overflow-hidden self-stretch"
+          className="flex-1 bg-background overflow-hidden self-stretch"
           onLayout={(event) => {
             const { width, height } = event.nativeEvent.layout;
             setLayout(computeOverlayLayout(width, height, gameRules.selectEdgeInsetPx));
@@ -186,9 +187,7 @@ export default function SelectScreen() {
         style={{ paddingBottom: Math.max(insets.bottom, FRAME_PAD) }}
       >
         <View className="gap-1.5">
-          <Button variant="ghost" size="sm" className="self-start" onPress={() => router.back()}>
-            <Button.Label>Back</Button.Label>
-          </Button>
+          <BackButton />
           <Text
             className="text-xl text-foreground leading-none"
             style={{ fontFamily: 'Anton-Regular' }}
