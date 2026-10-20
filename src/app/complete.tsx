@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Button, Chip, Surface } from 'heroui-native';
+import { Button, Chip, Input, Label, Surface, TextField } from 'heroui-native';
 import { EmptyState } from 'heroui-native-pro/empty-state';
 import { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
@@ -13,6 +13,8 @@ import {
   type OverlayLayout,
 } from '@/camera/overlayLayout';
 import { gameRules } from '@/config/gameRules';
+import { getSupabase } from '@/lib/supabase';
+import { submitHuntResult } from '@/lib/submitHuntResult';
 import { buildShape, pawnShape, type LineCell } from '@/shapeEngine';
 import { huntEndScore, isHuntComplete, useHuntStore } from '@/store/huntStore';
 
@@ -23,6 +25,9 @@ export default function CompleteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [layout, setLayout] = useState<OverlayLayout | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const shape = useMemo(() => buildShape(pawnShape), []);
   const gridSize = shape.definition.gridSize;
@@ -31,8 +36,12 @@ export default function CompleteScreen() {
   const resetHunt = useHuntStore((state) => state.resetHunt);
 
   const complete = isHuntComplete(lockedCells.length, gridSize);
-  const endScorePct = Math.round(huntEndScore(photos) * 100);
+  const endScore = huntEndScore(photos);
+  const endScorePct = Math.round(endScore * 100);
   const passedCount = photos.filter((photo) => photo.scorePassed).length;
+  const nameTrimmed = displayName.trim();
+  const nameValid = nameTrimmed.length >= 1 && nameTrimmed.length <= 24;
+  const supabaseReady = getSupabase() !== null;
 
   const photoTiles = useMemo(() => {
     if (!layout) {
@@ -50,6 +59,26 @@ export default function CompleteScreen() {
       router.dismissTo('/');
     } else {
       router.replace('/');
+    }
+  };
+
+  const onSubmit = async () => {
+    if (!nameValid || submitting) {
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await submitHuntResult({
+        displayName: nameTrimmed,
+        endScore,
+        photos,
+      });
+      router.push('/leaderboard');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Submit failed');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -101,7 +130,7 @@ export default function CompleteScreen() {
         </Chip>
       </View>
 
-      <Surface className="flex-1 overflow-hidden p-0 min-h-[220px]">
+      <Surface className="flex-1 overflow-hidden p-0 min-h-[180px]">
         <View
           className="flex-1"
           onLayout={(event) => {
@@ -186,7 +215,33 @@ export default function CompleteScreen() {
         ))}
       </ScrollView>
 
-      <Button size="lg" className="w-full" onPress={onRestart}>
+      <TextField isRequired isInvalid={Boolean(submitError) || (displayName.length > 0 && !nameValid)}>
+        <Label>Display name</Label>
+        <Input
+          placeholder="Your name on the board"
+          value={displayName}
+          onChangeText={setDisplayName}
+          maxLength={24}
+          autoCapitalize="words"
+          editable={!submitting}
+        />
+      </TextField>
+
+      {submitError ? (
+        <Text className="text-danger font-medium text-sm">{submitError}</Text>
+      ) : !supabaseReady ? (
+        <Text className="text-muted text-sm">Add Supabase keys to .env to submit.</Text>
+      ) : null}
+
+      <Button
+        size="lg"
+        className="w-full"
+        isDisabled={!nameValid || submitting || !supabaseReady}
+        onPress={onSubmit}
+      >
+        <Button.Label>{submitting ? 'Submitting…' : 'Submit to leaderboard'}</Button.Label>
+      </Button>
+      <Button variant="secondary" size="lg" className="w-full" onPress={onRestart} isDisabled={submitting}>
         <Button.Label>Restart hunt</Button.Label>
       </Button>
     </View>

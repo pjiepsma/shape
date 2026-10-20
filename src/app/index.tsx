@@ -52,7 +52,7 @@ export default function HomeScreen() {
                 : 'Add Supabase keys to .env'}
           </Text>
         </Card.Body>
-        <Card.Footer>
+        <Card.Footer className="gap-3">
           <Button
             className="w-full"
             size="lg"
@@ -62,6 +62,16 @@ export default function HomeScreen() {
               {huntComplete ? 'View results' : photos.length > 0 ? 'Continue' : 'Start hunt'}
             </Button.Label>
           </Button>
+          {supabaseReady ? (
+            <Button
+              className="w-full"
+              variant="secondary"
+              size="lg"
+              onPress={() => router.push('/leaderboard')}
+            >
+              <Button.Label>Leaderboard</Button.Label>
+            </Button>
+          ) : null}
         </Card.Footer>
       </Card>
     </SafeAreaView>

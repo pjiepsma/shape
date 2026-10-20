@@ -23,10 +23,11 @@ SDK 58 needs a **development build** (not Expo Go). `expo-dev-client` + local AP
 
 ### 1. Supabase project
 
-1. Create a Free project named **Outsee**.
+1. Create a Free project named **Outsee** (or use the existing one).
 2. Project Settings → API → copy **Project URL** and **anon public** key.
-3. Auth → Providers → enable **Anonymous Sign-Ins**.
-4. Copy [`.env.example`](.env.example) to `.env` and fill:
+3. Auth → Providers → enable **Anonymous Sign-Ins** (required for leaderboard submit).
+4. Apply [`supabase/migrations/001_hunt_results.sql`](supabase/migrations/001_hunt_results.sql) (table + `hunt-results` storage bucket).
+5. Copy [`.env.example`](.env.example) to `.env` and fill:
 
 ```bash
 cp .env.example .env
