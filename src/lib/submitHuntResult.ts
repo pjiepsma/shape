@@ -1,5 +1,6 @@
 import { composeHuntMosaic } from '@/camera/composeHuntMosaic';
-import { ensureAnonymousSession, getSupabase } from '@/lib/supabase';
+import { getCachedDisplayName, loadProfile, saveUsername } from '@/lib/profile';
+import { getSupabase } from '@/lib/supabase';
 import type { HuntPhoto } from '@/store/huntStore';
 
 export type HuntResultRow = {
@@ -10,10 +11,13 @@ export type HuntResultRow = {
   result_image_path: string;
   hunt_date: string;
   created_at: string;
+  /** Present on average board rows. */
+  hunt_count?: number;
 };
 
 export type SubmitHuntResultArgs = {
-  displayName: string;
+  /** Required on first submit when no profile exists yet. */
+  displayName?: string;
   endScore: number;
   photos: readonly HuntPhoto[];
 };
@@ -26,10 +30,6 @@ export type SubmitHuntResultOk = {
 const BUCKET = 'hunt-results';
 
 export async function submitHuntResult(args: SubmitHuntResultArgs): Promise<SubmitHuntResultOk> {
-  const name = args.displayName.trim();
-  if (name.length < 1 || name.length > 24) {
-    throw new Error('Display name must be 1–24 characters');
-  }
   if (args.endScore < 0 || args.endScore > 1) {
     throw new Error('Invalid end score');
   }
@@ -39,7 +39,15 @@ export async function submitHuntResult(args: SubmitHuntResultArgs): Promise<Subm
     throw new Error('Supabase is not configured — add keys to .env');
   }
 
-  const userId = await ensureAnonymousSession();
+  const existing = await loadProfile();
+  const cachedName = existing?.displayName ?? (await getCachedDisplayName());
+  const displayName = (cachedName ?? args.displayName ?? '').trim();
+  if (displayName.length < 1) {
+    throw new Error('Choose a username before submitting');
+  }
+
+  const { userId } = await saveUsername(displayName);
+
   const mosaicUri = await composeHuntMosaic(args.photos);
   const resultId = globalThis.crypto?.randomUUID?.() ?? fallbackUuid();
   const objectPath = `${userId}/${resultId}.jpg`;
@@ -62,7 +70,7 @@ export async function submitHuntResult(args: SubmitHuntResultArgs): Promise<Subm
     .insert({
       id: resultId,
       user_id: userId,
-      display_name: name,
+      display_name: displayName,
       end_score: args.endScore,
       result_image_path: objectPath,
       hunt_date: huntDate,
@@ -109,6 +117,83 @@ export async function fetchTodayLeaderboard(limit: number = 50): Promise<HuntRes
   }
 
   return data ?? [];
+}
+
+export async function fetchOverallLeaderboard(limit: number = 50): Promise<HuntResultRow[]> {
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase is not configured — add keys to .env');
+  }
+
+  const { data, error } = await supabase.rpc('fetch_leaderboard_all_time', {
+    result_limit: limit,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.filter(isHuntResultRow);
+}
+
+export async function fetchAverageLeaderboard(limit: number = 50): Promise<HuntResultRow[]> {
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase is not configured — add keys to .env');
+  }
+
+  const { data, error } = await supabase.rpc('fetch_leaderboard_avg_all_time', {
+    result_limit: limit,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.filter(isHuntResultRow);
+}
+
+function isHuntResultRow(value: unknown): value is HuntResultRow {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  if (!('id' in value) || typeof value.id !== 'string') {
+    return false;
+  }
+  if (!('user_id' in value) || typeof value.user_id !== 'string') {
+    return false;
+  }
+  if (!('display_name' in value) || typeof value.display_name !== 'string') {
+    return false;
+  }
+  if (!('end_score' in value) || typeof value.end_score !== 'number') {
+    return false;
+  }
+  if (!('result_image_path' in value) || typeof value.result_image_path !== 'string') {
+    return false;
+  }
+  if (!('hunt_date' in value) || typeof value.hunt_date !== 'string') {
+    return false;
+  }
+  if (!('created_at' in value) || typeof value.created_at !== 'string') {
+    return false;
+  }
+  if (
+    'hunt_count' in value &&
+    value.hunt_count !== undefined &&
+    typeof value.hunt_count !== 'number'
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function fallbackUuid(): string {

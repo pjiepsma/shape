@@ -5,8 +5,12 @@
 @import 'heroui-native-pro/styles';
 @import 'heroui-native-pro/themes/brutalism';
 
+/* App + style sources only — do not @source all of heroui-native-pro/lib
+   (charts call Skia matchFont at module load and break Metro web/SSR). */
+@source './src';
 @source './node_modules/heroui-native/lib';
-@source './node_modules/heroui-native-pro/lib';
+@source './node_modules/heroui-native-pro/lib/module/styles';
+@source './node_modules/heroui-native-pro/lib/module/themes';
 
 /* Always available to HeroUI useCSSVariable / Reanimated (not only via className). */
 @theme static {

@@ -1,6 +1,7 @@
-import { useRouter } from 'expo-router';
+import { useCameraPermissions } from 'expo-camera';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Button, Card, Chip } from 'heroui-native';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,6 +12,7 @@ import { isHuntComplete, useHuntStore } from '@/store/huntStore';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [permission, , getPermission] = useCameraPermissions();
   const supabaseReady = getSupabase() !== null;
   const shape = useMemo(() => buildShape(pawnShape), []);
   const lockedCells = useHuntStore((state) => state.lockedCells);
@@ -19,6 +21,14 @@ export default function HomeScreen() {
   const totalFraction = claimFraction(lockedCells.length, totalCells);
   const huntComplete = isHuntComplete(lockedCells.length, shape.definition.gridSize);
   const filledPct = Math.round(totalFraction * 100);
+  const cameraGranted = permission?.granted === true;
+  const huntBlocked = !huntComplete && !cameraGranted;
+
+  useFocusEffect(
+    useCallback(() => {
+      getPermission();
+    }, [getPermission]),
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-background px-6 justify-center">
@@ -47,20 +57,31 @@ export default function HomeScreen() {
           <Text className="text-muted text-sm">
             {huntComplete
               ? 'Outline complete — view your results'
-              : supabaseReady
-                ? 'Ready to hunt'
-                : 'Add Supabase keys to .env'}
+              : huntBlocked
+                ? 'Camera access needed to hunt — open Settings'
+                : supabaseReady
+                  ? 'Ready to hunt'
+                  : 'Add Supabase keys to .env'}
           </Text>
         </Card.Body>
         <Card.Footer className="gap-3">
           <Button
             className="w-full"
             size="lg"
+            isDisabled={huntBlocked}
             onPress={() => router.push(huntComplete ? '/complete' : '/select')}
           >
             <Button.Label>
               {huntComplete ? 'View results' : photos.length > 0 ? 'Continue' : 'Start hunt'}
             </Button.Label>
+          </Button>
+          <Button
+            className="w-full"
+            variant="secondary"
+            size="lg"
+            onPress={() => router.push('/settings')}
+          >
+            <Button.Label>Settings</Button.Label>
           </Button>
           {supabaseReady ? (
             <Button

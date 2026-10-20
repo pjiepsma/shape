@@ -1,8 +1,7 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Button, Chip, Input, Label, Surface, TextField } from 'heroui-native';
-import { EmptyState } from 'heroui-native-pro/empty-state';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,6 +12,7 @@ import {
   type OverlayLayout,
 } from '@/camera/overlayLayout';
 import { gameRules } from '@/config/gameRules';
+import { getCachedDisplayName, loadProfile } from '@/lib/profile';
 import { getSupabase } from '@/lib/supabase';
 import { submitHuntResult } from '@/lib/submitHuntResult';
 import { buildShape, pawnShape, type LineCell } from '@/shapeEngine';
@@ -26,6 +26,8 @@ export default function CompleteScreen() {
   const insets = useSafeAreaInsets();
   const [layout, setLayout] = useState<OverlayLayout | null>(null);
   const [displayName, setDisplayName] = useState('');
+  const [usernameLocked, setUsernameLocked] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -42,6 +44,41 @@ export default function CompleteScreen() {
   const nameTrimmed = displayName.trim();
   const nameValid = nameTrimmed.length >= 1 && nameTrimmed.length <= 24;
   const supabaseReady = getSupabase() !== null;
+  const canSubmit =
+    supabaseReady && !submitting && !profileLoading && (usernameLocked || nameValid);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const profile = await loadProfile();
+        const cached = profile?.displayName ?? (await getCachedDisplayName());
+        if (cancelled) {
+          return;
+        }
+        if (cached) {
+          setDisplayName(cached);
+          setUsernameLocked(true);
+        }
+      } catch {
+        if (!cancelled) {
+          const cached = await getCachedDisplayName();
+          if (cached) {
+            setDisplayName(cached);
+            setUsernameLocked(true);
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setProfileLoading(false);
+        }
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const photoTiles = useMemo(() => {
     if (!layout) {
@@ -63,14 +100,14 @@ export default function CompleteScreen() {
   };
 
   const onSubmit = async () => {
-    if (!nameValid || submitting) {
+    if (!canSubmit) {
       return;
     }
     setSubmitting(true);
     setSubmitError(null);
     try {
       await submitHuntResult({
-        displayName: nameTrimmed,
+        displayName: usernameLocked ? undefined : nameTrimmed,
         endScore,
         photos,
       });
@@ -85,20 +122,21 @@ export default function CompleteScreen() {
   if (!complete || photos.length === 0) {
     return (
       <View
-        className="flex-1 bg-background justify-center px-6"
+        className="flex-1 bg-background justify-center px-6 gap-4"
         style={{ paddingTop: insets.top }}
       >
-        <EmptyState>
-          <EmptyState.Header>
-            <EmptyState.Title>Outsee</EmptyState.Title>
-            <EmptyState.Description>No finished hunt to show.</EmptyState.Description>
-          </EmptyState.Header>
-          <EmptyState.Content>
-            <Button onPress={() => router.replace('/')}>
-              <Button.Label>Home</Button.Label>
-            </Button>
-          </EmptyState.Content>
-        </EmptyState>
+        <Text
+          className="text-5xl text-foreground leading-none"
+          style={{ fontFamily: 'Anton-Regular' }}
+        >
+          Outsee
+        </Text>
+        <Text className="text-muted font-medium text-base">
+          No finished hunt to show.
+        </Text>
+        <Button onPress={() => router.replace('/')}>
+          <Button.Label>Home</Button.Label>
+        </Button>
       </View>
     );
   }
@@ -215,17 +253,28 @@ export default function CompleteScreen() {
         ))}
       </ScrollView>
 
-      <TextField isRequired isInvalid={Boolean(submitError) || (displayName.length > 0 && !nameValid)}>
-        <Label>Display name</Label>
-        <Input
-          placeholder="Your name on the board"
-          value={displayName}
-          onChangeText={setDisplayName}
-          maxLength={24}
-          autoCapitalize="words"
-          editable={!submitting}
-        />
-      </TextField>
+      {usernameLocked ? (
+        <View className="gap-1">
+          <Text className="text-muted text-sm">Username</Text>
+          <Text className="text-foreground font-medium text-base">{displayName}</Text>
+          <Text className="text-muted text-xs">Change it in Settings</Text>
+        </View>
+      ) : (
+        <TextField
+          isRequired
+          isInvalid={Boolean(submitError) || (displayName.length > 0 && !nameValid)}
+        >
+          <Label>Username</Label>
+          <Input
+            placeholder="Pick a name for the board"
+            value={displayName}
+            onChangeText={setDisplayName}
+            maxLength={24}
+            autoCapitalize="words"
+            editable={!submitting && !profileLoading}
+          />
+        </TextField>
+      )}
 
       {submitError ? (
         <Text className="text-danger font-medium text-sm">{submitError}</Text>
@@ -233,12 +282,7 @@ export default function CompleteScreen() {
         <Text className="text-muted text-sm">Add Supabase keys to .env to submit.</Text>
       ) : null}
 
-      <Button
-        size="lg"
-        className="w-full"
-        isDisabled={!nameValid || submitting || !supabaseReady}
-        onPress={onSubmit}
-      >
+      <Button size="lg" className="w-full" isDisabled={!canSubmit} onPress={onSubmit}>
         <Button.Label>{submitting ? 'Submitting…' : 'Submit to leaderboard'}</Button.Label>
       </Button>
       <Button variant="secondary" size="lg" className="w-full" onPress={onRestart} isDisabled={submitting}>
